@@ -42,3 +42,5 @@ yarn-error.log*
 /fine-tuning/
 /classifier/
 EXPLAIN.md
+# Local Netlify folder
+.netlify
