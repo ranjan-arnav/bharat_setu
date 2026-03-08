@@ -269,15 +269,15 @@ graph TB
    end
 
    subgraph "API Layer"
-      AGENTAPI[/api/agent]
-      TRAPI[/api/translate]
-      VAPI[/api/voice]
-      SAFETY[/api/content-safety]
-      SCHAPI[/api/schemes]
-      GRVAPI[/api/grievance]
-      SOSAPI[/api/sos]
-      STATUSAPI[/api/sos/status]
-      SMSAPI[/api/sos/sms]
+      AGENTAPI["/api/agent"]
+      TRAPI["/api/translate"]
+      VAPI["/api/voice"]
+      SAFETY["/api/content-safety"]
+      SCHAPI["/api/schemes"]
+      GRVAPI["/api/grievance"]
+      SOSAPI["/api/sos"]
+      STATUSAPI["/api/sos/status"]
+      SMSAPI["/api/sos/sms"]
    end
 
    subgraph "Cloud and External Services"
@@ -368,12 +368,12 @@ graph TB
    end
 
    subgraph "SOS API Layer"
-      SOS[/api/sos]
-      DISPATCH[/api/sos/dispatch]
-      STATUS[/api/sos/status]
-      UPDATE[/api/sos/update-location]
-      END[/api/sos/end]
-      SMS[/api/sos/sms]
+      SOS["/api/sos"]
+      DISPATCH["/api/sos/dispatch"]
+      STATUS["/api/sos/status"]
+      UPDATE["/api/sos/update-location"]
+      END["/api/sos/end"]
+      SMS["/api/sos/sms"]
    end
 
    subgraph "Decision and Registry Layer"
