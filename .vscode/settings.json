@@ -1,0 +1,27 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "css.lint.propertyIgnoredDueToDisplay": "ignore",
+  "css.lint.compatibleVendorPrefixes": "ignore",
+  "css.lint.boxModel": "ignore",
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "html.validate.styles": false,
+  "html.validate.scripts": false,
+  "stylelint.enable": false,
+  "stylelint.validate": ["css", "less", "scss"],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.stylelint": "never"
+  },
+  "tailwindCSS.validate": true,
+  "tailwindCSS.lint.cssConflict": "warning",
+  "tailwindCSS.lint.invalidApply": "error",
+  "tailwindCSS.lint.invalidConfigPath": "error",
+  "tailwindCSS.lint.invalidScreen": "error",
+  "tailwindCSS.lint.invalidTailwindDirective": "error",
+  "tailwindCSS.lint.invalidVariant": "error",
+  "tailwindCSS.lint.recommendedVariantOrder": "warning"
+}
