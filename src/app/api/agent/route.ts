@@ -61,7 +61,7 @@ function pickDeployment(): string {
 
 const VALID_AGENTS: AgentKey[] = ['nagarik_mitra', 'swasthya_sahayak', 'yojana_saathi', 'arthik_salahkar', 'vidhi_sahayak'];
 
-const PHI_ROUTING_MODEL = "microsoft/Phi-4-mini-instruct";
+const PHI_ROUTING_MODEL = "microsoft/Phi-4";
 const GITHUB_MODELS_ENDPOINT = "https://models.github.ai/inference";
 
 // ── In-memory caches (persists for lifetime of server process) ────────────────
@@ -278,7 +278,7 @@ async function classifyAgentWithPhi(message: string): Promise<AgentKey | null> {
             { role: 'system', content: PHI_ROUTING_SYSTEM },
             { role: 'user', content: buildPhiUserPrompt(english) },
           ],
-          max_tokens: 1200,
+          max_tokens: 20,
           temperature: 0.0,
           top_p: 1.0,
         },

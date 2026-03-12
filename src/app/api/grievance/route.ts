@@ -57,7 +57,7 @@ Rules:
 Respond ONLY with valid JSON, no markdown.`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
 
     const response = await fetch('https://models.github.ai/inference/chat/completions', {
       method: 'POST',
@@ -66,7 +66,7 @@ Respond ONLY with valid JSON, no markdown.`;
         'Authorization': `Bearer ${phiToken}`,
       },
       body: JSON.stringify({
-        model: 'microsoft/Phi-4-mini-instruct',
+        model: 'microsoft/Phi-4',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
         top_p: 1.0,
