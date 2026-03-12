@@ -86,7 +86,7 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
   },
   {
     keywords: [
-      'rti', 'certificate', 'pramanpatra', 'birth certificate', 'death certificate', 'property', 'digipin',
+      'certificate', 'pramanpatra', 'birth certificate', 'death certificate', 'property', 'digipin',
       'प्रमाणपत्र', 'जन्म', 'मृत्यु', 'संपत्ति', 'शिकायत',
     ], agent: 'nagarik_mitra', topic: 'Civic Certificate'
   },
@@ -95,9 +95,11 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
       // Transliterated
       'hospital', 'aspatal', 'dawai', 'dawa', 'medicine', 'doctor', 'beemar', 'bimar', 'health', 'swasthya',
       'ambulance', 'blood', 'fever', 'bukhar', 'sick', 'ilaj', 'treatment', 'tablet', 'dard', 'pain', 'khansi', 'ulti',
+      'feel', 'feeling', 'tabiyat', 'tabeeyat', 'ajeeb', 'ghabra', 'ghabrahat', 'theek nahi', 'thik nahi',
+      'sehat', 'chakkar', 'kamzori', 'weakness', 'dizziness', 'unwell', 'bura lag', 'man kharab', 'fit nahi',
       // Devanagari (Hindi) — critical for correct routing
       'डॉक्टर', 'दवा', 'दवाई', 'अस्पताल', 'बीमार', 'बुखार', 'दर्द', 'खांसी', 'उल्टी',
-      'इलाज', 'स्वास्थ्य', 'तबियत', 'बीमारी',
+      'इलाज', 'स्वास्थ्य', 'तबियत', 'बीमारी', 'अजीब', 'घबराहट', 'ठीक नहीं', 'सेहत', 'चक्कर', 'कमज़ोरी',
       // Other scripts
       'হাসপাতাল', 'ডাক্তার', 'ওষুধ', 'ఆసుపత్రి', 'డాక్టర్', 'మందు',
       'மருத்துவமனை', 'டாக்டர்', 'மருந்து', 'रुग्णालय', 'औषध',
@@ -155,6 +157,7 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
       'fir', 'f.i.r', 'police', 'pulis', 'kanoon', 'law', 'court', 'vakeel', 'lawyer', 'legal',
       'arrest', 'giraftar', 'bail', 'nyaya', 'adhikar', 'right', 'case file', 'complain police',
       'consumer', 'dispute', 'domestic', 'dowry', 'thana', 'nalsa',
+      'rti', 'r.t.i', 'right to information', 'suchna adhikar', 'सूचना का अधिकार', 'सूचना',
       // Land / property (legal)
       'land', 'zameen', 'zamin', 'jamin', 'jameen', 'bhumi', 'bhoomi', 'acquisition',
       'muavja', 'muavza', 'compensation', 'kabja', 'kabza', 'encroach', 'atikraman',
@@ -401,7 +404,9 @@ export default function VoiceAssistant({
 
     // Default to nagarik_mitra so the user always gets connected — never stall.
     const winner: AgentKey = apiBest || 'nagarik_mitra';
-    const topic = INTENT_DEFS.find((d) => d.agent === winner)?.topic || 'General Query';
+    const topic = apiBest
+      ? (INTENT_DEFS.find((d) => d.agent === winner)?.topic || 'General Query')
+      : 'General Query';
     setClassifySource(apiBest ? 'api' : 'local');
     setDetectedIntent({ agent: winner, topic });
     // Surface second-best scored agent as handoff suggestion for slow path too
