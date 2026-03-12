@@ -119,6 +119,7 @@ interface AppState {
   trackedItems: TrackedItem[];
   addTrackedItem: (item: TrackedItem) => void;
   updateTrackedStatus: (id: string, status: TrackedItem['status']) => void;
+  enrichTrackedItem: (id: string, patch: Partial<Pick<TrackedItem, 'title' | 'description' | 'status' | 'refId' | 'eta' | 'portal' | 'emoji' | 'neighbourhood' | 'amount'>>) => void;
 
   // Track tab badge count
   trackBadge: number;
@@ -209,6 +210,7 @@ export const useAppStore = create<AppState>((set) => ({
     karmaScore: state.karmaScore + 50, // award 50 karma for each tracked item
   })),
   updateTrackedStatus: (id, status) => set((state) => ({ trackedItems: state.trackedItems.map(t => t.id === id ? { ...t, status } : t) })),
+  enrichTrackedItem: (id, patch) => set((state) => ({ trackedItems: state.trackedItems.map(t => t.id === id ? { ...t, ...patch } : t) })),
 
   trackBadge: 3, // matches 3 seeded demo trackedItems
   clearTrackBadge: () => set({ trackBadge: 0 }),

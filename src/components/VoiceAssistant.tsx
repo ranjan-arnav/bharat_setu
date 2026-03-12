@@ -9,7 +9,7 @@ import { useTranslation } from '@/lib/i18n/useTranslation';
 // Covers all 22 scheduled languages supported in onboarding
 const langOptions = [
   { code: 'hi-IN', label: 'हिन्दी', flag: '🇮🇳' },
-  { code: 'en-IN', label: 'English', flag: '🇬🇧' },
+  { code: 'en-IN', label: 'English', flag: '�🇳' },
   { code: 'bn-IN', label: 'বাংলা', flag: '🇮🇳' },
   { code: 'te-IN', label: 'తెలుగు', flag: '🇮🇳' },
   { code: 'mr-IN', label: 'मराठी', flag: '🇮🇳' },

@@ -61,7 +61,7 @@ function pickDeployment(): string {
 
 const VALID_AGENTS: AgentKey[] = ['nagarik_mitra', 'swasthya_sahayak', 'yojana_saathi', 'arthik_salahkar', 'vidhi_sahayak'];
 
-const PHI_ROUTING_MODEL = "microsoft/phi-4-mini-instruct";
+const PHI_ROUTING_MODEL = "microsoft/Phi-4-mini-instruct";
 const GITHUB_MODELS_ENDPOINT = "https://models.github.ai/inference";
 
 // ── In-memory caches (persists for lifetime of server process) ────────────────
@@ -80,9 +80,13 @@ async function callGpt41MiniFallback(
   if (!token) return null;
   try {
     const client = ModelClient('https://models.github.ai/inference', new AzureKeyCredential(token));
-    const res = await client.path('/chat/completions').post({
-      body: { messages, model: 'openai/gpt-4.1-mini', max_tokens: maxTokens, temperature: 0.7 },
-    });
+    const timeoutP = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GPT41_TIMEOUT')), 12000));
+    const res = await Promise.race([
+      client.path('/chat/completions').post({
+        body: { messages, model: 'openai/gpt-4.1-mini', max_tokens: maxTokens, temperature: 0.7 },
+      }),
+      timeoutP,
+    ]);
     if (isUnexpected(res)) { console.warn('[FALLBACK] gpt-4.1-mini unexpected:', res.body.error?.message); return null; }
     const reply = res.body.choices?.[0]?.message?.content || null;
     console.log('[FALLBACK] gpt-4.1-mini replied ok');
@@ -113,7 +117,7 @@ async function translateToEnglish(text: string): Promise<string> {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify([{ text: text.slice(0, 500) }]),
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(3000),
       }
     );
     if (!res.ok) {
@@ -151,18 +155,28 @@ async function translateWithMyMemory(text: string, cacheKey: string): Promise<st
 }
 
 // One-shot routing: English query → single Phi-4-mini-instruct call → one agent key
-const PHI_ROUTING_SYSTEM = `You are a routing assistant for Bharat Setu, an Indian citizen services app.
-Given an English user query, reply with ONLY the single best agent key. No explanation. No punctuation.
+const PHI_ROUTING_SYSTEM = `You are a routing classifier. You MUST reply with exactly ONE word — either one of the agent keys below, or the word null if you cannot determine the category. No explanation, no punctuation, no extra text.
+nagarik_mitra
+swasthya_sahayak
+yojana_saathi
+arthik_salahkar
+vidhi_sahayak
+null`;
 
-RULES (read carefully):
-- nagarik_mitra    = civic complaints: broken road, water supply failure, drainage, street light, garbage, municipality
-- swasthya_sahayak = body health only: fever, pain, cough, digestion, eating/drinking problem, poop/stool, addiction, mental health, doctor, not feeling well, sick, headache, body pain
-  IMPORTANT: Ayushman Bharat card application/registration is NOT health — it is a government SCHEME → yojana_saathi
-- yojana_saathi    = govt schemes & entitlements: PM-KISAN, pension, ration card (new/add name/correction), Ayushman Bharat/PMJAY card apply or register, MGNREGA job card, PM-Awas, subsidy, crop insurance, scholarship, certificate
-  IMPORTANT: Ration card naam add karna (adding name to ration card) → yojana_saathi
-- arthik_salahkar  = money & banking: UPI fraud, OTP scam, bank problem, loan, cyber fraud, insurance claim
-- vidhi_sahayak    = law & rights: FIR, police complaint, land dispute, court, lawyer, arrest, RTI
-`;
+function buildPhiUserPrompt(english: string): string {
+  return `Classify the following citizen request into exactly one of these agent keys. If the request does not clearly match any category, reply with null. Reply with ONLY the key name or the word null — no explanation, no punctuation, no sentence.
+
+Agent keys:
+nagarik_mitra = road, water, electricity, garbage, civic complaint
+swasthya_sahayak = health, symptoms, doctor, medicine, feeling ill or weird
+yojana_saathi = government scheme, subsidy, ration, pension, MGNREGA
+arthik_salahkar = money, bank, loan, fraud, UPI, savings
+vidhi_sahayak = police, FIR, law, lawyer, abuse, rights, harassment
+
+Request: ${english.slice(0, 300)}
+
+Reply with one word only (agent key or null):`;
+}
 
 // ── Script-agnostic overrides — run on the RAW message BEFORE translation ──────
 // Catches Devanagari/regional keywords when Azure Translator is not configured.
@@ -172,7 +186,10 @@ const RAW_OVERRIDES: { pattern: RegExp; agent: AgentKey; reason: string }[] = [
   { pattern: /डॉक्टर|दवा|दवाई|अस्पताल|बीमार|बुखार|दर्द|खांसी|उल्टी|इलाज|तबियत/,                           agent: 'swasthya_sahayak', reason: 'Hindi health keywords' },
   { pattern: /योजना|किसान|राशन|पेंशन|सब्सिडी|मनरेगा|नरेगा|उज्ज्वला|आवास|फसल/,                              agent: 'yojana_saathi',    reason: 'Hindi scheme keywords' },
   { pattern: /पुलिस|कानून|वकील|अदालत|एफआईआर|न्याय|अधिकार|गिरफ्तार|जमानत|थाना/,                             agent: 'vidhi_sahayak',    reason: 'Hindi legal keywords' },
+  { pattern: /घरेलू\s*हिंसा|मारपीट|उत्पीड़न|छेड़छाड़|बलात्कार|दहेज|यौन\s*शोषण|महिला\s*सुरक्षा|पति.*मार|पति.*पीट|मारता\s*है|पीटता\s*है/, agent: 'vidhi_sahayak', reason: 'Hindi domestic violence and women safety keywords' },
   { pattern: /सड़क|पानी|बिजली|सफाई|कचरा|नाला|नगर\s*निगम|शिकायत/,                                            agent: 'nagarik_mitra',    reason: 'Hindi civic keywords' },
+  { pattern: /पेट.*अजीब|अजीब.*पेट|पेट.*अजब|अजब.*पेट|पेट.*खराब|पेट.*दर्द|पेट.*ठीक\s*नहीं/,              agent: 'swasthya_sahayak',  reason: 'Hindi stomach/digestive complaint' },
+  { pattern: /pet.*ajib|ajib.*pet|pet.*ajeeb|ajeeb.*pet|pet.*kharab|pet.*dard/i,                             agent: 'swasthya_sahayak',  reason: 'Transliterated stomach complaint' },
   // Lawyer/legal counsel — Urdu/Hindi transliterations often missed by Ministral
   { pattern: /wak[ie]el|waqeel|vakeel?|vakil|attorney|lawyer|legal\s*aid|mujhe.*waqeel|ek.*vakil/i,           agent: 'vidhi_sahayak',    reason: 'lawyer/legal counsel transliterations' },
   // Property encroachment — civic-sounding but fundamentally a legal matter
@@ -196,14 +213,20 @@ const ENGLISH_OVERRIDES: { pattern: RegExp; agent: AgentKey; reason: string }[] 
   { pattern: /ayushman\s+bharat\s+card|pmjay\s+card|ayushman\s+card/i, agent: 'yojana_saathi',   reason: 'Ayushman card = PMJAY scheme enrollment' },
   // MGNREGA job card
   { pattern: /mgnrega\s+card|job\s+card|narega\s+card/i,              agent: 'yojana_saathi',    reason: 'job card = MGNREGA scheme' },
-  // Feeling unwell / sick — any form of body health complaint in English
-  { pattern: /not\s+feeling\s+well|not\s+feeling\s+good|feeling\s+(sick|ill|bad|unwell|dizzy|weak)|not\s+well|i'?m\s+(sick|ill|unwell)|i\s+am\s+(sick|ill|unwell)|feel\s+(sick|bad|ill|unwell)|body\s+(pain|ache)|headache|sore\s+throat|high\s+fever|stomach\s+(pain|ache|upset)|chest\s+pain/i, agent: 'swasthya_sahayak', reason: 'feeling unwell/sick = health' },
+  // Feeling unwell / sick / strange — any form of body health complaint in English
+  { pattern: /not\s+feeling\s+well|not\s+feeling\s+good|feeling\s+(sick|ill|bad|unwell|dizzy|weak|weird|strange|off|funny|odd)|not\s+well|i'?m\s+(sick|ill|unwell)|i\s+am\s+(sick|ill|unwell)|feel\s+(sick|bad|ill|unwell|weird|strange|off|funny|odd)|man.*ajeeb|ajeeb.*lag|body\s+(pain|ache)|headache|sore\s+throat|high\s+fever|stomach\s+(pain|ache|upset)|chest\s+pain/i, agent: 'swasthya_sahayak', reason: 'feeling unwell/sick/weird = health' },
   // Eating/drinking/digestion/bowel problems — body health, not financial
   { pattern: /\b(poop|stool|bowel movement|loose motion|diarrh|vomit(?:ing)?|nausea|problem in eating|problem in drinking|eating problem|digestion problem)\b/i, agent: 'swasthya_sahayak', reason: 'eating/digestion/bowel = body health' },
+  // Stomach feeling strange/weird/bad
+  { pattern: /stomach\s+(?:is\s+)?(?:strange|weird|bad|off|wrong|not\s+(?:ok|right|normal|good))|(?:strange|weird|ajeeb|ajib)\s+(?:stomach|tummy|gut|pet)|my\s+stomach|stomach\s+(?:ache|pain|hurt)/i, agent: 'swasthya_sahayak', reason: 'stomach strange/weird/bad = health' },
   // Property encroachment — a legal matter not civic
   { pattern: /\bkabza\b|encroach|unauthori[sz]ed.*propert|propert.*disput|propert.*encroach|illegal.*occupation/i, agent: 'vidhi_sahayak', reason: 'property encroachment = legal dispute' },
   // Lawyer/legal help — English
   { pattern: /\b(lawyer|attorney|advocate|legal\s+counsel|legal\s+help|need.*lawyer|want.*lawyer|find.*lawyer)\b/i, agent: 'vidhi_sahayak', reason: 'lawyer/legal help keywords' },
+  // Domestic violence, abuse, harassment, and women safety issues are legal/safety matters
+  { pattern: /domestic\s+violence|domestic\s+abuse|abusive\s+husband|husband.*(beat|hits|hit|abuse)|beating\s+me|marital\s+rape|sexual\s+harassment|molest|molestation|rape|assault|stalking|dowry\s+harassment|women'?s\s+safety|gender\s+violence/i, agent: 'vidhi_sahayak', reason: 'domestic violence and women safety keywords' },
+  // Personal safety concerns — night, streets, threats
+  { pattern: /feel\s+unsafe|feeling\s+unsafe|unsafe\s+at\s+night|not\s+safe|feel\s+threatened|feel\s+scared|being\s+followed|someone\s+following|stalked|i\s+am\s+scared|scared\s+at\s+night|fear\s+for\s+(my\s+)?safety/i, agent: 'vidhi_sahayak', reason: 'personal safety/unsafe = legal/police' },
 ];
 
 function getKeywordOverride(english: string): AgentKey | null {
@@ -229,7 +252,7 @@ async function classifyAgentWithPhi(message: string): Promise<AgentKey | null> {
     return routingCache.get(msgKey)!;
   }
 
-  const token = process.env["GITHUB_TOKEN_PHI"] || process.env["GITHUB_TOKEN_MINISTRAL"] || process.env["GITHUB_TOKEN"] || '';
+  const token = process.env["GITHUB_TOKEN_PHI"] || process.env["GITHUB_TOKEN"] || '';
   if (!token) return null;
   const t0 = Date.now();
   try {
@@ -244,40 +267,24 @@ async function classifyAgentWithPhi(message: string): Promise<AgentKey | null> {
       return override;
     }
 
-    // Step 2: send English query to Phi-4-mini-instruct via GitHub Models
+    // Step 2: send the translated English query to Phi and force a one-word route.
     const client = ModelClient(GITHUB_MODELS_ENDPOINT, new AzureKeyCredential(token));
-    const res = await client.path('/chat/completions').post({
-      body: {
-        model: PHI_ROUTING_MODEL,
-        messages: [
-          { role: 'system',    content: PHI_ROUTING_SYSTEM },
-          { role: 'user',      content: 'I have a fever for 3 days and need medicine' },
-          { role: 'assistant', content: 'swasthya_sahayak' },
-          { role: 'user',      content: 'I am not feeling well' },
-          { role: 'assistant', content: 'swasthya_sahayak' },
-          { role: 'user',      content: 'The road in my colony is broken and full of potholes' },
-          { role: 'assistant', content: 'nagarik_mitra' },
-          { role: 'user',      content: 'Someone stole money from my UPI account' },
-          { role: 'assistant', content: 'arthik_salahkar' },
-          { role: 'user',      content: 'I have not received my PM-KISAN instalment' },
-          { role: 'assistant', content: 'yojana_saathi' },
-          { role: 'user',      content: 'How to make Ayushman Bharat card or register for the scheme' },
-          { role: 'assistant', content: 'yojana_saathi' },
-          { role: 'user',      content: 'I want to add my name to the ration card' },
-          { role: 'assistant', content: 'yojana_saathi' },
-          { role: 'user',      content: 'Police is refusing to file my FIR' },
-          { role: 'assistant', content: 'vidhi_sahayak' },
-          { role: 'user',      content: 'I have a problem eating, drinking and having a bowel movement' },
-          { role: 'assistant', content: 'swasthya_sahayak' },
-          { role: 'user',      content: 'My husband is addicted to diet coke, please help' },
-          { role: 'assistant', content: 'swasthya_sahayak' },
-          { role: 'user',      content: english.slice(0, 400) },
-        ],
-        max_tokens: 15,
-        temperature: 0.0,
-        top_p: 1.0,
-      },
-    });
+    const phiTimeoutP = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('PHI_TIMEOUT')), 35000));
+    const res = await Promise.race([
+      client.path('/chat/completions').post({
+        body: {
+          model: PHI_ROUTING_MODEL,
+          messages: [
+            { role: 'system', content: PHI_ROUTING_SYSTEM },
+            { role: 'user', content: buildPhiUserPrompt(english) },
+          ],
+          max_tokens: 1200,
+          temperature: 0.0,
+          top_p: 1.0,
+        },
+      }),
+      phiTimeoutP,
+    ]);
 
     if (isUnexpected(res)) {
       console.warn('[PHI] unexpected response:', res.body.error?.message);
@@ -477,16 +484,18 @@ export async function POST(request: NextRequest) {
       !azureConfig.openai.apiKey.startsWith('your-')
     );
     const useGitHubModels = !hasAzureOpenAI; // GitHub Models is primary when Azure not configured
-    // Ministral 3B routing via GitHub Models free tier (rate-limited, no Azure billing)
-    const usePhiRouting = !!(process.env["GITHUB_TOKEN_PHI"] || process.env["GITHUB_TOKEN_MINISTRAL"] || process.env["GITHUB_TOKEN"]);
+    // Phi-4-mini-instruct routing via GitHub Models free tier
+    const usePhiRouting = !!(process.env["GITHUB_TOKEN_PHI"] || process.env["GITHUB_TOKEN"]);
 
     // ═══════════════════════════════════════════════════
     // STEP 1: Route to the correct agent
-    //   Order: Ministral 3B (fast, own token) → local TF-IDF (fallback) → clientDetected
+    //   Order: Phi-4-mini-instruct → local TF-IDF (fallback) → clientDetected
     // ═══════════════════════════════════════════════════
     let resolvedAgentKey: AgentKey = agentKey as AgentKey;
     let suggestedAgent: string | null = null;
     let phiClassified: AgentKey | null = null;
+    // Kept alive so post-GPT code can harvest a Phi result that arrives during GPT execution
+    let phiPromise: Promise<AgentKey | null> = Promise.resolve(null);
 
     const clientAgent = VALID_AGENTS.includes(clientDetectedAgent as AgentKey) ? clientDetectedAgent as AgentKey : null;
 
@@ -497,36 +506,35 @@ export async function POST(request: NextRequest) {
       console.log(`[ROUTING] SKIPPED — no meaningful text to route`);
       resolvedAgentKey = agentKey as AgentKey;
     } else if (clientAgent === agentKey) {
-      // Client and current agent agree — but still run Phi to catch edge cases
-      // where user switches topics within the same agent
-      let classified: AgentKey | null = null;
-
-      if (usePhiRouting) {
-        classified = await classifyAgentWithPhi(routingText);
-        phiClassified = classified;
-      }
-
-      if (classified && classified !== agentKey) {
-        suggestedAgent = classified;
-        resolvedAgentKey = classified;
-        console.log(`[ROUTING] PHI OVERRIDE: ${agentKey} → ${classified} (client agreed with current)`);
-      } else {
-        resolvedAgentKey = agentKey as AgentKey;
-        console.log(`[ROUTING] client+current+phi agree: ${clientAgent}`);
-      }
+      // Client keyword detection and active agent already agree — skip Phi entirely.
+      // Running Phi here adds latency with no benefit: both signals point to the same agent.
+      resolvedAgentKey = agentKey as AgentKey;
+      console.log(`[ROUTING] client+current agree: ${clientAgent} — Phi skipped`);
     } else {
       // Run full classification (client detected different agent OR client detected nothing)
       let classified: AgentKey | null = null;
 
-      // ── Pass 1: Phi-4 / Ministral 3B (dedicated token, fast & lightweight) ──
+      // ── Phi-4-mini-instruct routing — parallel with GPT ──
+      // Fire Phi immediately but only wait 5s max before proceeding to GPT.
+      // Warm Phi resolves in 2-3s so it usually wins the race.
+      // Cold-starting Phi (>5s) no longer blocks the user — GPT starts right away.
+      // phiPromise stays alive; post-GPT code harvests the result if it arrives in time.
       if (usePhiRouting) {
-        classified = await classifyAgentWithPhi(routingText);
-        phiClassified = classified;
+        phiPromise = classifyAgentWithPhi(routingText);
+        classified = await Promise.race([
+          phiPromise,
+          new Promise<null>(r => setTimeout(() => r(null), 5000)),
+        ]);
+        if (classified) {
+          phiClassified = classified;
+        } else {
+          console.log('[PHI] 5s early timeout — GPT starting immediately, Phi still running in background');
+        }
       }
 
-      // ── Pass 2: Local TF-IDF (fallback if Phi fails/null) ─────
+      // ── Pass 2: Local TF-IDF (fallback if Phi didn't resolve in 5s) ─────
       if (!classified) {
-        console.log(`[LOCAL] Phi/Ministral null/failed — falling back to TF-IDF`);
+        console.log(`[LOCAL] Phi null/slow — falling back to TF-IDF`);
         const t0 = Date.now();
         classified = await classifyAgentLocal(message);
         console.log(`[LOCAL] returned="${classified}" in ${Date.now()-t0}ms`);
@@ -593,6 +601,7 @@ RULES:
 5. Use simple vocabulary appropriate for a citizen who may not be tech-savvy.
 6. For emergencies, always mention 112 (National Emergency) or 108 (Ambulance).
 7. Do NOT mention other agents, do NOT suggest handoffs — you are already the correct agent.
+${!phiClassified ? `8. ROUTING (mandatory, Phi classifier unavailable): Output exactly AGENT:<key> as the very first line (no spaces, no punctuation around it), where <key> is the single best agent for this specific query from: nagarik_mitra, swasthya_sahayak, yojana_saathi, arthik_salahkar, vidhi_sahayak. Then a blank line, then your normal response. Example first line: AGENT:swasthya_sahayak` : ``}
 ${(() => {
   if (!citizenProfile) return '';
   const dobYear = citizenProfile.dob ? parseInt((citizenProfile.dob as string).split(' ').pop() || '0') : 0;
@@ -638,14 +647,19 @@ KEY INSTRUCTIONS:
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (useGitHubModels) {
-      headers['Authorization'] = `Bearer ${ghToken}`;
+      // When Phi failed and GPT is doing routing, use the dedicated routing token to avoid
+      // exhausting the main chat token's rate limit on routing calls.
+      const gptRoutingToken = !phiClassified
+        ? (process.env['GITHUB_TOKEN_GPT_ROUTING'] || ghToken)
+        : ghToken;
+      headers['Authorization'] = `Bearer ${gptRoutingToken}`;
     } else {
       headers['api-key'] = azureConfig.openai.apiKey;
     }
 
     const bodyPayload: Record<string, unknown> = {
       messages,
-      max_tokens: 200,  // keep responses concise; saves token cost
+      max_tokens: 700,  // enough for detailed step-by-step guidance
       temperature: 0.7,
       top_p: 0.95,
       presence_penalty: 0.1,
@@ -659,7 +673,7 @@ KEY INSTRUCTIONS:
       method: 'POST',
       headers,
       body: JSON.stringify(bodyPayload),
-      signal: AbortSignal.timeout(15000), // 15s hard limit for Azure
+      signal: AbortSignal.timeout(12000), // 12s hard limit
     });
 
     // ── 429 handling: try the OTHER deployment first, then GitHub fallback ─────
@@ -732,7 +746,39 @@ KEY INSTRUCTIONS:
     const data = await response.json();
     // Log the actual model used — Azure returns the fine-tune model ID here (confirms v2 vs v1)
     if (data.model) console.log(`[MODEL] actual="${data.model}" deploy="${chosenDeployment}"`);
-    const reply = data.choices?.[0]?.message?.content || 'कृपया पुनः प्रयास करें।';
+    const rawReply = data.choices?.[0]?.message?.content || 'कृपया पुनः प्रयास करें।';
+
+    // ── Post-GPT: harvest Phi if it resolved while GPT was running ─────────
+    // GPT takes 3-12s; warm Phi takes 2-3s — so Phi is often already done here.
+    // 100ms gives it a final chance without adding meaningful latency.
+    if (!phiClassified) {
+      const phiLate = await Promise.race([
+        phiPromise,
+        new Promise<null>(r => setTimeout(() => r(null), 100)),
+      ]);
+      if (phiLate) {
+        phiClassified = phiLate;
+        console.log(`[PHI] late result (resolved during GPT execution): ${phiLate}`);
+        if (phiLate !== resolvedAgentKey && !suggestedAgent) {
+          suggestedAgent = phiLate;
+          console.log(`[PHI] late handoff suggestion: → ${phiLate}`);
+        }
+      }
+    }
+
+    // ── Extract and strip the AGENT: routing prefix emitted by GPT ───────────
+    let reply = rawReply;
+    const agentPrefixMatch = rawReply.match(/^AGENT:(nagarik_mitra|swasthya_sahayak|yojana_saathi|arthik_salahkar|vidhi_sahayak)[\s\n]*/i);
+    if (agentPrefixMatch) {
+      const gptAgent = agentPrefixMatch[1].toLowerCase() as AgentKey;
+      reply = rawReply.slice(agentPrefixMatch[0].length).trim();
+      console.log(`[GPT] routing tag: ${gptAgent}`);
+      // If Phi failed and GPT disagrees with current agent, surface a handoff suggestion
+      if (!phiClassified && gptAgent !== resolvedAgentKey) {
+        suggestedAgent = gptAgent;
+        console.log(`[GPT] Phi had failed — GPT reroute suggestion: ${gptAgent}`);
+      }
+    }
 
     return NextResponse.json({
       reply,
