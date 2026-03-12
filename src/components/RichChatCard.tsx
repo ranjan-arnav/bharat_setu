@@ -16,7 +16,7 @@ const ABHA_RE = /\bABHA\b|abdm|health\s?id|हेल्थ\s?आईडी/i;
 const DBT_RE = /\b(DBT|direct benefit|kist|installment|₹[\d,]+\s?(transfer|credited|bhej|diya|aaya))/i;
 
 export interface ParsedCard {
-  type: 'grievance' | 'scheme' | 'emergency' | 'legal' | 'health' | 'finance' | 'nagar_samwad' | 'abha' | 'dbt';
+  type: 'grievance' | 'scheme' | 'emergency' | 'legal' | 'health' | 'finance' | 'nagar_samwad' | 'abha' | 'dbt' | 'track-tab';
   icon: string;
   color: string;
   title: string;
@@ -164,6 +164,18 @@ export function parseCards(content: string, agentKey: AgentKey, profile?: UserPr
     });
   }
 
+  // Track Tab CTA — injected by quick-action rich responses
+  if (/~~TRACK_TAB~~/i.test(content)) {
+    cards.push({
+      type: 'track-tab',
+      icon: 'assignment_turned_in',
+      color: '#6366F1',
+      title: 'Track Tab में देखें • View Status',
+      subtitle: 'Live updates, ETA & full ticket history',
+      actionLabel: 'Open Track Tab',
+    });
+  }
+
   return cards;
 }
 
@@ -179,6 +191,7 @@ function InlineCard({ card, agentKey, onTrack }: { card: ParsedCard; agentKey: A
     nagar_samwad: 'from-amber-500/10  to-amber-500/5  border-amber-500/20',
     abha: 'from-red-500/10    to-red-500/5    border-red-500/20',
     dbt: 'from-purple-500/10 to-purple-500/5 border-purple-500/20',
+    'track-tab': 'from-indigo-500/15 to-indigo-500/5 border-indigo-500/30',
   };
 
   return (
@@ -419,7 +432,7 @@ export default function RichChatCard({ content, agentKey, onAction }: RichChatCa
   return (
     <div>
       <div className="space-y-0.5">
-        {renderMarkdown(content)}
+        {renderMarkdown(content.replace(/\n?~~TRACK_TAB~~/gi, ''))}
       </div>
       {cards.map((card, i) => (
         <InlineCard key={i} card={card} agentKey={agentKey} onTrack={handleCardAction} />

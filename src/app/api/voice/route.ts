@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { azureConfig } from '@/lib/azure-config';
 
+// Allowlist of supported Azure Speech language codes for India
+const VALID_LANG_CODES = new Set([
+  'hi-IN', 'en-IN', 'bn-IN', 'te-IN', 'mr-IN', 'ta-IN', 'gu-IN', 'kn-IN', 'ml-IN',
+]);
+
 // POST /api/voice - Handle voice-to-text and text-to-speech via Azure Speech Services
 export async function POST(request: NextRequest) {
   try {
     const { action, text, language = 'hi-IN' } = await request.json();
 
     if (action === 'tts') {
+      // Validate language against allowlist to prevent SSML attribute injection
+      const safeLang = VALID_LANG_CODES.has(language) ? language : 'hi-IN';
+
       // Escape XML special characters to prevent SSML injection / malformed markup
       const safeText = (text as string)
         .replace(/&/g, '&amp;')
@@ -44,10 +52,10 @@ export async function POST(request: NextRequest) {
         'ml-IN': 'ml-IN-SobhanaNeural',
       };
 
-      const voice = voiceMap[language] || 'hi-IN-SwaraNeural';
+      const voice = voiceMap[safeLang] || 'hi-IN-SwaraNeural';
 
       const ssml = `
-        <speak version="1.0" xml:lang="${language}">
+        <speak version="1.0" xml:lang="${safeLang}">
           <voice name="${voice}">
             <prosody rate="0.9" pitch="+0%">
               ${safeText}

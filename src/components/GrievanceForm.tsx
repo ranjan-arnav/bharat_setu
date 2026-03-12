@@ -51,6 +51,11 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image must be under 5 MB. Please choose a smaller photo.');
+        e.target.value = '';
+        return;
+      }
       setImageFile(file);
       const reader = new FileReader();
       reader.onload = (ev) => setImagePreview(ev.target?.result as string);

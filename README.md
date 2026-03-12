@@ -218,19 +218,6 @@ The repo uses Azure Content Safety as a moderation layer for both user text and 
 
 The voice route escapes XML content before generating SSML for TTS. The grievance route blocks high-severity unsafe text. The agent route performs pre-generation safety checks. Those are all signs that the app is intended to be demoable in a hackathon while still following a credible trust posture.
 
-### 3.5 Demo-resilient product design
-
-One of the strongest qualities of this codebase is its fallback strategy.
-
-- No Azure Translator key: translation passes through.
-- No Azure Vision: image analysis returns a demo-safe analysis string.
-- No Azure AI Search: schemes come from bundled demo data.
-- No Azure OpenAI quota: chat and routing can rely on GitHub Models.
-- No live backend persistence: tracked items still exist locally in the store.
-- No production SMS provider credentials: dispatch remains simulatable in development.
-
-That is exactly the kind of resilience a hackathon demo needs. The product can still be shown end-to-end even when some cloud resources are unavailable.
-
 ---
 
 ## 4. System Architecture

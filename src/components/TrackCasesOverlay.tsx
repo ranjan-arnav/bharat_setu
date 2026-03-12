@@ -58,9 +58,9 @@ export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgen
     { key: 'finance',   label: t('filterFinance'), icon: 'account_balance_wallet' },
   ];
 
-  const filtered = filter === 'all' ? trackedItems : trackedItems.filter((t) => t.type === filter);
-  const resolvedCount = trackedItems.filter((t) => t.status === 'Resolved').length;
-  const activeCount   = trackedItems.filter((t) => t.status !== 'Resolved').length;
+  const filtered = filter === 'all' ? trackedItems : trackedItems.filter((item) => item.type === filter);
+  const resolvedCount = trackedItems.filter((item) => item.status === 'Resolved').length;
+  const activeCount   = trackedItems.filter((item) => item.status !== 'Resolved').length;
 
   return (
     <div
@@ -109,7 +109,7 @@ export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgen
         {/* Filter tabs */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
           {FILTERS.map((f) => {
-            const count = f.key === 'all' ? trackedItems.length : trackedItems.filter((t) => t.type === f.key).length;
+            const count = f.key === 'all' ? trackedItems.length : trackedItems.filter((item) => item.type === f.key).length;
             return (
               <button
                 key={f.key}

@@ -44,3 +44,6 @@ yarn-error.log*
 EXPLAIN.md
 # Local Netlify folder
 .netlify
+tsconfig.tsbuildinfo
+FIXES_SUMMARY.md
+phi-test.mjs

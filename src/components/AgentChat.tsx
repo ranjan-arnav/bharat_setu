@@ -29,6 +29,66 @@ function getTrackAddedMsg(language?: string): string {
   return msgs[lang] || msgs.hi;
 }
 
+/** Parse an agent reply for structured ticket metadata to enrich a tracked item. */
+function parseReplyForTrackData(reply: string): {
+  refId?: string;
+  eta?: string;
+  status?: 'Active' | 'Under Review' | 'In Progress' | 'Resolved' | 'Pending';
+  portal?: string;
+  title?: string;
+  neighbourhood?: number;
+  amount?: string;
+} {
+  const out: ReturnType<typeof parseReplyForTrackData> = {};
+
+  // Ref ID — "Ticket: GRV-2026-4521" or bare ID patterns
+  const refMatch = reply.match(/(?:Ticket|Ref(?:erence)?|No\.?|ID|#)\s*[:.]?\s*([A-Z][A-Z0-9\/\-]{4,25})/i)
+    || reply.match(/\b(GRV-[A-Z0-9\-]+|TKT-[A-Z0-9\-]+|KISAN-TKT-[A-Z0-9\-]+|PMJAY-[A-Z0-9\-]+|WTR-[A-Z0-9\-]+|FIR-[A-Z0-9\-]+|CYBER-[A-Z0-9\-]+)\b/);
+  if (refMatch) out.refId = (refMatch[1] || refMatch[0]).trim();
+
+  // ETA
+  const etaMatch = reply.match(/(?:Expected\s+resolution|ETA|within(?:\s+next)?|in)\s*[:.–-]?\s*(\d+\s+hours?|\d+[-–]\d+\s+(?:hours?|days?|working\s+days?)|\d+\s+(?:working\s+)?days?)/i);
+  if (etaMatch) out.eta = etaMatch[1].trim();
+
+  // Status
+  if (/\b(forwarded|registered|submitted|processing|in\s+progress)\b/i.test(reply)) out.status = 'In Progress';
+  else if (/\b(under\s+review|reviewing|being\s+reviewed)\b/i.test(reply)) out.status = 'Under Review';
+  else if (/\b(resolved|completed|fixed|done|closed)\b/i.test(reply)) out.status = 'Resolved';
+  else if (/\b(pending|waiting|queued)\b/i.test(reply)) out.status = 'Pending';
+
+  // Portal URL
+  const portalMap: [RegExp, string][] = [
+    [/pgportal\.gov\.in/i, 'pgportal.gov.in'],
+    [/pmkisan\.gov\.in/i, 'pmkisan.gov.in'],
+    [/pmjay\.gov\.in/i, 'pmjay.gov.in'],
+    [/jansamarth/i, 'jansamarth.in'],
+    [/umang|mygov/i, 'umang.gov.in'],
+    [/myscheme/i, 'myscheme.gov.in'],
+    [/1930|cybercrime\.gov/i, 'cybercrime.gov.in'],
+    [/nalsa/i, 'nalsa.gov.in'],
+  ];
+  for (const [pattern, portal] of portalMap) {
+    if (pattern.test(reply)) { out.portal = portal; break; }
+  }
+
+  // Neighbourhood count — "+12 same issue" or "12 others"
+  const nbMatch = reply.match(/[+\+](\d+)\s+(?:same\s+issue|others?|neighbou?rs?)/i);
+  if (nbMatch) out.neighbourhood = parseInt(nbMatch[1], 10);
+
+  // Amount — ₹2,000 or Rs. 2000
+  const amtMatch = reply.match(/[₹Rs\.]+\s?([\d,]+(?:\.\d{2})?)/);
+  if (amtMatch) out.amount = `₹${amtMatch[1]}`;
+
+  // Title — first meaningful non-emoji line from reply (under 65 chars)
+  const titleLine = reply
+    .split('\n')
+    .map(l => l.replace(/^[\s\uD83D\uDD26\uD83D\uDCA1\uD83D\uDEB0\uD83C\uDF3E\uD83D\uDC8A\u2696\uFE0F\uD83C\uDFE5\uD83D\uDCB0\uD83D\uDCCB\uD83D\uDEA8\u2705\u26A0\uFE0F\uD83C\uDF1F\uD83C\uDFDB\uFE0F]+/, '').replace(/\*\*/g, '').trim())
+    .find(l => l.length > 8 && l.length < 65 && !/^(Hello|Hi|I am|Namaskar|नमस्ते)/i.test(l));
+  if (titleLine) out.title = titleLine;
+
+  return out;
+}
+
 const agents: { key: AgentKey; name: string; nameHi: string; icon: string; color: string; shortName: string }[] = [
   { key: 'nagarik_mitra', name: 'Nagarik Mitra', nameHi: 'नागरिक मित्र', icon: 'account_balance', color: '#3B82F6', shortName: 'NM' },
   { key: 'swasthya_sahayak', name: 'Swasthya Sahayak', nameHi: 'स्वास्थ्य सहायक', icon: 'health_and_safety', color: '#10B981', shortName: 'SS' },
@@ -44,7 +104,7 @@ const AGENT_KEYWORDS: Record<AgentKey, RegExp> = {
   swasthya_sahayak: /(hospital|hosptl|aspatal|aspataal|doctor|daktar|doktar|health|helth|স্বাস্থ্য|swasthya|vaccin|vaxin|vaksin|vakcin|tika|teeka|teekaa|टीका|medicin|dawai|dawa|davai|दवाई|ayushman|aayushman|আয়ুষ্মান|ambulance|ambulans|এম্বুলেন্স|blood|khoon|বীমার|bimar|beemar|sick|fever|bukhar|bukhaar|বুখার|covid|pregnan|garbh|গর্ভ|abdm|u-?win|uwin|ilaj|ilaaj|treatment|checkup|check-?up|rog|rogi|bimari|bimaari|দবা|sehat|tablet|injection|clinic|tabiyat|tabeeyat|तबियत|thik\s?nahi?|ठीक नहीं|unwell|not\s?well|not\s?feeling|feeling\s?(sick|ill|bad|unwell|dizzy)|feel\s?(sick|bad|ill|unwell)|i.?m\s+(sick|ill|unwell)|body\s?(pain|ache)|headache|sore\s?throat|high\s?temp|ill\b|feel\s?nahi?|dard|দর্দ|স্বাস্থ্য|ডাক্তার|ওষুধ|অসুস্থ|টিকা|জ্বর|ఆసుపత్రి|డాక్టర్|మందు|జబ్బు|టీకా|జ్వరం|மருத்துவமனை|டாக்டர்|மருந்து|நோய்|தடுப்பூசி|காய்ச்சல்|रुग्णालय|औषध|आजारी|लस|ताप|ಆಸ್ಪತ್ರೆ|ವೈದ್ಯ|ಔಷಧ|ಜ್ವರ|ആശുപത്രി|ഡോക്ടർ|മരുന്ന്|പനി|ਹਸਪਤਾਲ|ਡਾਕਟਰ|ਦਵਾਈ|ਬਿਮਾਰ|eating|khaana|khana|khana\s?nahi|khana\s?nahi?|not\s?eating|loss\s?of\s?appetite|bhookh\s?nahi|bhojan|poop|stool|latrine|motion|loose\s?motion|diarrhea|diarrhoea|daast|dast|दस्त|ulti|ultee|vomit|उल्टी|nausea|ghbrahat|nauzia|digest|digestive|pet\s?kharab|khana\s?nahi\s?pa|peena|drinking\s?problem|pain\s?eating|khana\s?khaane\s?mein|pina|पेट खराब|dysentr|cholera|dehydr|kamzori|weakness|dizziness|chakkar|चक्कर|weight\s?loss|vajan\s?kam|appetite|bhookh|भूख|पीना|खाना|addict|addiction|obsess|craving|paglu|naasha|nasha|नशा|alcohol|smoking|cigaret|drug\s?habit|junk\s?food|diet\s?coke|mental\s?health|anxiety|depress|stress|phobia|aadat|adat|आदत|latt|lat)/i,
   yojana_saathi: /(scheme|skeem|yojana|yojna|योजना|pm[\s-]?kisan|kisan|kisaan|কিষান|subsidy|subsidi|sabsidi|সাবসিডি|awas|aavas|awaas|housing|makan|makaan|মাকান|mgnrega|mnrega|narega|nrega|নরেগা|ujjwala|ujwala|ujala|গ্যাস|gas|fasal\s?bima|crop|fasal|ফসল|enroll|patrata|paatrata|পাত্রতা|eligib|registr|panjikaran|panjikran|পঞ্জিকরণ|welfare|sarkari|government\s?scheme|labh|laabh|pension|ration|ayushman|ayushmann|ayushmaan|pmjay|pm-?jay|আয়ুষ্মান|যোজনা|প্রকল্প|পেনশন|রেশন|ভর্তুকি|কৃষক|పథకం|యోజన|పెన్షన్|రేషన్|సబ్సిడీ|రైతు|திட்டம்|யோஜனை|ஓய்வூதியம்|ரேஷன்|மானியம்|விவசாயி|योजना|पेन्शन|रेशन|शेतकरी|ಯೋಜನೆ|ಪಿಂಚಣಿ|ರೇಷನ್|ರೈತ|പദ്ധതി|പെൻഷൻ|ਯੋਜਨਾ|ਪੈਨਸ਼ਨ|ਰਾਸ਼ਨ|ਕਿਸਾਨ)/i,
   arthik_salahkar: /(scam|skam|fraud|frod|dhokha|धोखा|otp|upi|loan|lon|লোন|mudra|মুদ্রা|bank|baink|বাইংক|jan\s?dhan|saving|bachat|বচত|invest|nivesh|নিবেশ|money|paisa|paise|পাইসা|payment|paymnt|financi|emi|credit|debit|digital\s?pay|phishing|cyber\s?fraud|mulehunter|cheat|thug|thagi|thagee|ঠগি|loot|rupay|rupee|atm|wallet|account|khata|খাতা|ব্যাংক|ঋণ|জালিয়াতি|প্রতারণা|ইউপিআই|బ్యాంకు|రుణం|మోసం|సైబర్|வங்கி|கடன்|மோசடி|சைபர்|बँक|कर्ज|फसवणूक|ਬੈਂਕ|ਕਰਜ਼|ਧੋਖਾ|ಬ್ಯಾಂಕ್|ಸಾಲ|ವಂಚನೆ|ಸೈಬರ್|ബാങ്ക്|വായ്പ|തട്ടിപ്പ്|സൈബർ)/i,
-  vidhi_sahayak: /(fir|f\.i\.r|police|pulis|pulice|পুলিশ|court|kort|আদালত|legal|legl|kanoon|kानून|কানুন|law|adhikar|অধিকার|right|arrest|giraftar|giraftaar|গ্রেফতার|bail|zamanat|jamanat|জামানত|nalsa|nyaya|nyay|ন্যায়|consumer|upbhokta|উপভোক্তা|lawyer|vakil|vakeel|বাকিল|magistrate|dispute|vivad|vivaad|বিবাদ|domestic\s?violen|dowry|dahej|দাহেজ|zero\s?fir|thana|chauki|case\s?file|complain\s?police|kanuni|পুলিশ|আদালত|আইন|অধিকার|এফআইআর|పోలీసు|న్యాయస్థానం|చట్టం|హక్కు|போலீஸ்|நீதிமன்றம்|சட்டம்|உரிமை|पोलीस|न्यायालय|कायदा|हक्क|ਪੁਲਿਸ|ਅਦਾਲਤ|ਕਾਨੂੰਨ|ਅਧਿਕਾਰ|ಪೊಲೀಸ್|ನ್ಯಾಯಾಲಯ|ಕಾನೂನು|ಹಕ್ಕು|പോലീസ്|കോടതി|നിയമം|അവകാശം)/i,
+  vidhi_sahayak: /(fir|f\.i\.r|police|pulis|pulice|পুলিশ|court|kort|আদালত|legal|legl|kanoon|kानून|কানুন|law|adhikar|অধিকার|right|arrest|giraftar|giraftaar|গ্রেফতার|bail|zamanat|jamanat|জামানত|nalsa|nyaya|nyay|ন্যায়|consumer|upbhokta|উপভোক্তা|lawyer|vakil|vakeel|বাকিল|magistrate|dispute|vivad|vivaad|বিবাদ|domestic\s?violen|domestic\s?abuse|abuse|harassment|assault|rape|molest|stalk|dowry|dahej|দাহেজ|zero\s?fir|thana|chauki|case\s?file|complain\s?police|kanuni|घरेलू\s*हिंसा|मारपीट|उत्पीड़न|छेड़छाड़|बलात्कार|महिला\s*सुरक्षा|पति.*मार|पति.*पीट|পুলিশ|আদালত|আইন|অধিকার|এফআইআর|పోలీసు|న్యాయస్థానం|చట్టం|హక్కు|போலீஸ்|நீதிமன்றம்|சட்டம்|உரிமை|पोलीस|न्यायालय|कायदा|हक्क|ਪੁਲਿਸ|ਅਦਾਲਤ|ਕਾਨੂੰਨ|ਅਧਿਕਾਰ|ಪೊಲೀಸ್|ನ್ಯಾಯಾಲಯ|ಕಾನೂನು|ಹಕ್ಕು|പോലീസ്|കോടതി|നിയമം|അവകാശം)/i,
 };
 
 /** Score all agents against a pre-normalised message string. Shared by detectBestAgent and
@@ -110,8 +170,56 @@ const quickActions: Record<AgentKey, { label: string; query: string }[]> = {
   ],
 };
 
+/** Find TrackedItems relevant to a quick-action button click */
+function findRelatedTrackedItems(
+  query: string,
+  label: string,
+  items: TrackedItem[],
+): TrackedItem[] {
+  const combined = (query + ' ' + label).toLowerCase();
+  const rules: Array<{ re: RegExp; check: (it: TrackedItem) => boolean }> = [
+    {
+      re: /streetlight|street.?light|lamp|bulb|broken.?light/,
+      check: it =>
+        it.type === 'grievance' &&
+        /streetlight|light|lamp|bulb/i.test(it.title + ' ' + it.description),
+    },
+    {
+      re: /water|paani|pani/,
+      check: it =>
+        it.type === 'grievance' &&
+        /water|paani|pani|supply/i.test(it.title + ' ' + it.description),
+    },
+    {
+      re: /road|pothole|sadak/,
+      check: it =>
+        it.type === 'grievance' &&
+        /road|pothole|sadak/i.test(it.title + ' ' + it.description),
+    },
+    {
+      re: /kisan|pm.?kisan|farmer|crop/,
+      check: it =>
+        it.type === 'scheme' && /kisan/i.test(it.title + ' ' + it.description),
+    },
+    { re: /scam|fraud|upi|otp|cyber/, check: it => it.type === 'finance' },
+    { re: /zerofir|zero.?fir|fir|court|legal/, check: it => it.type === 'legal' },
+    {
+      re: /vaccin|health|hospital|ayushman/,
+      check: it => it.type === 'health',
+    },
+    { re: /scheme|yojana|pension/, check: it => it.type === 'scheme' },
+  ];
+  for (const { re, check } of rules) {
+    if (re.test(combined)) {
+      const found = items.filter(check);
+      if (found.length) return found;
+    }
+  }
+  return [];
+}
+
 export default function AgentChat({ onClose }: { onClose: () => void }) {
-  const { activeAgent, setActiveAgent, chatHistory, addMessage, addTrackedItem } = useAppStore();
+  const { activeAgent, setActiveAgent, setOverlay, chatHistory, addMessage, addTrackedItem, enrichTrackedItem } = useAppStore();
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -130,6 +238,8 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
   const recognitionRef = useRef<unknown>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Holds the id of the auto-tracked item just added, so we can enrich it once the reply arrives
+  const pendingTrackId = useRef<string | null>(null);
 
   const currentAgent = agents.find((a) => a.key === activeAgent) || agents[0];
   const messages = chatHistory[activeAgent];
@@ -227,6 +337,11 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
   const handleImageAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      addMessage(activeAgent, { id: `err-${Date.now()}`, role: 'assistant', content: '⚠️ Image must be under 5 MB. Please choose a smaller photo.', timestamp: Date.now(), agentKey: activeAgent });
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onloadend = () => setAttachedPreview(reader.result as string);
     reader.readAsDataURL(file);
@@ -359,8 +474,10 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
         /\b(PM-?KISAN|yojana|pension|ration|scholarship|chhatravritti|mgnrega|narega|subsidy|scheme)\b/i.test(text) ? 'scheme' :
         /\b(UPI|fraud|scam|loan|bank|OTP|cyber)\b/i.test(text) ? 'finance' :
         'grievance';
+      const trackId = `auto-${Date.now()}`;
+      pendingTrackId.current = trackId;
       const autoItem: TrackedItem = {
-        id: `auto-${Date.now()}`,
+        id: trackId,
         type: trackedType,
         title: text.length > 55 ? text.slice(0, 55) + '…' : text,
         description: `Via ${agents.find(a => a.key === currentAgent)?.name || 'Agent'}`,
@@ -536,6 +653,12 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                 agentKey: currentAgent,
               });
               setIsTyping(false);
+              // Enrich the pending tracked item with ticket details from the reply
+              if (pendingTrackId.current) {
+                const patch = parseReplyForTrackData(data.reply);
+                if (Object.keys(patch).length > 0) enrichTrackedItem(pendingTrackId.current, patch);
+                pendingTrackId.current = null;
+              }
 
               // Handle server-side agent handoff suggestion (fallback keyword-based)
               if (data.suggestedAgent && data.suggestedAgent !== currentAgent && !wasRerouted && !skipAddUserMsg) {
@@ -576,6 +699,12 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
         agentKey: currentAgent,
       });
       setIsTyping(false);
+      // Enrich the pending tracked item with ticket details from the demo reply
+      if (pendingTrackId.current) {
+        const patch = parseReplyForTrackData(reply);
+        if (Object.keys(patch).length > 0) enrichTrackedItem(pendingTrackId.current, patch);
+        pendingTrackId.current = null;
+      }
       // Speak the response if TTS is enabled
       if (ttsEnabled) speakText(reply);
     }, delay);
@@ -614,6 +743,69 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
   const handleQuickAction = (query: string, label: string) => {
     // Strip leading emoji and whitespace
     const cleanLabel = label.replace(/^[^\w\u0900-\u097F]+/, '').trim();
+
+    if (/scheme\s*scanner/i.test(cleanLabel)) {
+      setOverlay('scheme-scanner');
+      return;
+    }
+
+    // If there are matching items in the Track tab, show a rich status response
+    const relatedItems = findRelatedTrackedItems(
+      query,
+      label,
+      useAppStore.getState().trackedItems,
+    );
+    if (relatedItems.length > 0) {
+      const item = relatedItems[0];
+      const sEmoji: Record<string, string> = {
+        Active: '\uD83D\uDD35',
+        'Under Review': '\uD83D\uDFE1',
+        'In Progress': '\uD83D\uDFE0',
+        Resolved: '\u2705',
+        Pending: '\u23F3',
+      };
+      const lines: string[] = [
+        `${item.emoji || '\uD83D\uDCCB'} **${item.title}** Track tab \u092e\u0947\u0902 \u0926\u0930\u094d\u091c \u0939\u0948\u0964`,
+        `Your case is already being tracked.`,
+        ``,
+        `**Status:** ${sEmoji[item.status] ?? '\uD83D\uDD35'} ${item.status}`,
+      ];
+      if (item.refId) lines.push(`**Ticket ID:** \`${item.refId}\``);
+      if (item.eta) lines.push(`**ETA:** ${item.eta}`);
+      if (item.neighbourhood)
+        lines.push(`**+${item.neighbourhood}** neighbours in your area filed the same issue`);
+      if (item.amount) lines.push(`**Amount:** ${item.amount}`);
+      if (item.portal) lines.push(`**Portal:** ${item.portal}`);
+      if (relatedItems.length > 1)
+        lines.push(
+          ``,
+          `+${relatedItems.length - 1} more related case${
+            relatedItems.length > 2 ? 's' : ''
+          } in your Track tab`,
+        );
+      lines.push(``, `~~TRACK_TAB~~`);
+
+      const { activeAgent: curAgent } = useAppStore.getState();
+      addMessage(curAgent, {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: cleanLabel || label,
+        timestamp: Date.now(),
+      });
+      setIsTyping(true);
+      setTimeout(() => {
+        addMessage(curAgent, {
+          id: `track-rich-${Date.now()}`,
+          role: 'assistant',
+          content: lines.join('\n'),
+          timestamp: Date.now(),
+          agentKey: curAgent,
+        });
+        setIsTyping(false);
+      }, 700);
+      return;
+    }
+
     sendMessage(cleanLabel || label, query);
   };
 
@@ -684,6 +876,8 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                     window.open('https://dbtbharat.gov.in', '_blank');
                   } else if (card.type === 'scheme') {
                     window.open('https://jansamarth.in', '_blank');
+                  } else if (card.type === 'track-tab') {
+                    setOverlay('track');
                   }
 
                   // 2. Also track the card if it has a refId

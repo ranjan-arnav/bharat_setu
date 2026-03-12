@@ -96,6 +96,8 @@ export default function HomePage() {
       ];
       const karmaTierInfo = karmaTiers.find(t => karmaScore >= t.min) ?? karmaTiers[3];
       const karmaProgress = Math.min(100, Math.round((karmaScore / karmaTierInfo.next) * 100));
+      const streakDays = Math.min(30, Math.max(1, trackedItems.filter(i => i.status === 'Resolved').length * 3 + trackedItems.length));
+      const karmaRank = Math.max(1, Math.ceil((1500 - karmaScore) / 10));
       iframe.contentWindow?.postMessage(
         {
           source: 'bharat-setu-parent',
@@ -113,10 +115,8 @@ export default function HomePage() {
           karmaProgress,
           karmaNextTier: karmaTierInfo.nextName,
           karmaNextThreshold: karmaTierInfo.next,
-          // derive streakDays from items resolved (min 1, max capped at 30)
-          streakDays: Math.min(30, Math.max(1, trackedItems.filter(i => i.status === 'Resolved').length * 3 + trackedItems.length)),
-          // karma rank: higher score = better rank (lower number)
-          karmaRank: Math.max(1, Math.ceil((1500 - karmaScore) / 10)),
+          streakDays,
+          karmaRank,
         },
         '*',
       );
@@ -184,9 +184,9 @@ export default function HomePage() {
           civicInit.textContent = (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '');
         }
         const kur = d.getElementById('karma-user-rank') as HTMLElement | null;
-        if (kur) kur.textContent = `#${Math.max(1, Math.ceil((1500 - karmaScore) / 10))}`;
+        if (kur) kur.textContent = `#${karmaRank}`;
         const kstreakEl = d.getElementById('karma-streak') as HTMLElement | null;
-        if (kstreakEl) kstreakEl.textContent = String(Math.min(30, Math.max(1, trackedItems.filter((i) => i.status === 'Resolved').length * 3 + trackedItems.length)));
+        if (kstreakEl) kstreakEl.textContent = String(streakDays);
       } catch { /* ignore DOM errors */ }
     } catch {
       // cross-origin fallback - silently ignore

@@ -17,11 +17,20 @@ export async function POST(request: NextRequest) {
       count: true,
     };
 
-    // Apply filters based on user profile
+    // Apply filters based on user profile — sanitize values to prevent OData injection
     const filterParts: string[] = [];
-    if (filters.category) filterParts.push(`category eq '${filters.category}'`);
-    if (filters.state) filterParts.push(`states/any(s: s eq '${filters.state}')`);
-    if (filters.income_limit) filterParts.push(`income_limit ge ${filters.income_limit}`);
+    if (filters.category) {
+      const safeCategory = String(filters.category).replace(/'/g, '');
+      filterParts.push(`category eq '${safeCategory}'`);
+    }
+    if (filters.state) {
+      const safeState = String(filters.state).replace(/'/g, '');
+      filterParts.push(`states/any(s: s eq '${safeState}')`);
+    }
+    if (filters.income_limit !== undefined) {
+      const n = Number(filters.income_limit);
+      if (Number.isFinite(n) && n >= 0) filterParts.push(`income_limit ge ${n}`);
+    }
     if (filterParts.length) searchBody.filter = filterParts.join(' and ');
 
     const response = await fetch(searchUrl, {
