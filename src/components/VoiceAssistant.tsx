@@ -212,6 +212,7 @@ export default function VoiceAssistant({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [statusMsg, setStatusMsg] = useState('');
   const [classifySource, setClassifySource] = useState<'local' | 'api' | null>(null);
+  const [secondaryAgent, setSecondaryAgent] = useState<AgentKey | null>(null);
 
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
   const finalTranscriptRef = useRef('');
@@ -335,6 +336,9 @@ export default function VoiceAssistant({
       setProcessing(false);
       setClassifySource('local');
       setDetectedIntent({ agent: localBest.agent, topic: localBest.topic });
+      // Surface second-best agent as handoff suggestion
+      const secondBest = scored.find((s) => s.agent !== localBest.agent);
+      setSecondaryAgent(secondBest ? secondBest.agent : null);
       setCountdown(4);
 
       // Background API refinement — updates silently if it strongly disagrees
@@ -360,6 +364,8 @@ export default function VoiceAssistant({
             const topic = INTENT_DEFS.find((d) => d.agent === apiBest)?.topic || 'Your Query';
             setClassifySource('api');
             setDetectedIntent({ agent: apiBest, topic });
+            // Old local result becomes the handoff secondary suggestion
+            setSecondaryAgent(localBest.agent);
           }
         })
         .catch(() => { /* ignore — local result stands */ });
@@ -398,6 +404,10 @@ export default function VoiceAssistant({
     const topic = INTENT_DEFS.find((d) => d.agent === winner)?.topic || 'General Query';
     setClassifySource(apiBest ? 'api' : 'local');
     setDetectedIntent({ agent: winner, topic });
+    // Surface second-best scored agent as handoff suggestion for slow path too
+    const allScored = scoreIntents(text);
+    const secondBestSlow = allScored.find((s) => s.agent !== winner);
+    setSecondaryAgent(secondBestSlow ? secondBestSlow.agent : null);
     setCountdown(4);
   };
 
@@ -420,6 +430,7 @@ export default function VoiceAssistant({
     setStatusMsg('');
     setConfidence(0);
     setClassifySource(null);
+    setSecondaryAgent(null);
     finalTranscriptRef.current = '';
   };
 
@@ -640,6 +651,28 @@ export default function VoiceAssistant({
               <span className="material-symbols-outlined">chat</span>
               {t('talkTo')} {meta.nameEn}
             </button>
+
+            {/* Agent handoff suggestion — mirrors chat handoff card */}
+            {secondaryAgent && (
+              <button
+                onClick={() => goToAgent(secondaryAgent)}
+                className="w-full rounded-2xl border p-4 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
+                style={{ background: `${AGENT_META[secondaryAgent].color}0d`, borderColor: `${AGENT_META[secondaryAgent].color}35` }}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                  style={{ background: `${AGENT_META[secondaryAgent].color}25` }}
+                >
+                  {AGENT_META[secondaryAgent].icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">🔁 Also try</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white">{AGENT_META[secondaryAgent].nameEn}</div>
+                  <div className="text-[11px]" style={{ color: AGENT_META[secondaryAgent].color }}>{AGENT_META[secondaryAgent].nameHi} से भी बात करें?</div>
+                </div>
+                <span className="material-symbols-outlined text-slate-400 shrink-0">arrow_forward</span>
+              </button>
+            )}
 
             <div className="flex gap-2">
               <button
