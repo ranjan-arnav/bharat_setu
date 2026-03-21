@@ -88,15 +88,15 @@ graph TB
     end
 
     subgraph "API Routes"
-      AGENT[/api/agent]
-      STT[/api/stt]
-      VOI[/api/voice]
-      TR[/api/translate]
-      GR[/api/grievance]
-      SCM[/api/schemes]
-      SOSAPI[/api/sos/*]
-      CS[/api/content-safety]
-      VIS[/api/vision-chat]
+      AGENT["/api/agent"]
+      STT["/api/stt"]
+      VOI["/api/voice"]
+      TR["/api/translate"]
+      GR["/api/grievance"]
+      SCM["/api/schemes"]
+      SOSAPI["/api/sos routes"]
+      CS["/api/content-safety"]
+      VIS["/api/vision-chat"]
     end
 
     subgraph "External Services"
@@ -111,7 +111,14 @@ graph TB
 
     UI --> IFRAME
     UI --> OVR
-    OVR --> CHAT & VOICE & GRV & SCH & SOS & DIGI & TRACK & IMP
+    OVR --> CHAT
+    OVR --> VOICE
+    OVR --> GRV
+    OVR --> SCH
+    OVR --> SOS
+    OVR --> DIGI
+    OVR --> TRACK
+    OVR --> IMP
 
     CHAT --> AGENT
     VOICE --> STT
