@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { FlagStripe } from '@/components/ui/GoiElements';
+import { useTranslation } from '@/lib/i18n/useTranslation';
 // DIGIPIN Character Alphabet — 16 chars for 4×4 grid encoding (India Post specification)
 // Official alphabet: rows (S→N), columns (W→E) each split into 4
 const DIGIPIN_ALPHABET = 'FCJ987XM654HGWKB';
@@ -85,6 +86,7 @@ interface DigipinLocatorProps {
 }
 
 export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocatorProps) {
+  const { t } = useTranslation();
   const { userProfile, setUserProfile } = useAppStore();
   const [digipin, setDigipin] = useState<string>(userProfile.digipin || '');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -102,7 +104,7 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
     setCoords(null);
 
     if (!navigator.geolocation) {
-      setError('इस ब्राउज़र में Geolocation उपलब्ध नहीं है।');
+      setError(t('geolocationNotAvailableInBrowser', 'Geolocation is not available in this browser.'));
       setLoading(false);
       return;
     }
@@ -114,7 +116,7 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
         const code = encodeDigipin(lat, lon);
 
         if (!code) {
-          setError('आप भारत की सीमाओं के बाहर हैं। DIGIPIN केवल भारत के लिए है।');
+          setError(t('outsideIndiaDigipinOnly', 'You are outside India boundaries. DIGIPIN works only within India.'));
         } else {
           setDigipin(code);
           setCoords({ lat, lon });
@@ -125,16 +127,16 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
       },
       (err) => {
         const msgs: Record<number, string> = {
-          1: 'Location permission denied. Browser settings में Location allow करें।',
-          2: 'Location unavailable. GPS enable करें।',
-          3: 'Location request timed out. फिर से try करें।',
+          1: t('locationPermissionDeniedAllowInBrowserSettings', 'Location permission denied. Allow location in browser settings.'),
+          2: t('locationUnavailableEnableGps', 'Location unavailable. Please enable GPS.'),
+          3: t('locationRequestTimedOutTryAgain', 'Location request timed out. Please try again.'),
         };
-        setError(msgs[err.code] || 'Location detect करने में error आई।');
+        setError(msgs[err.code] || t('locationDetectionFailed', 'Failed to detect location.'));
         setLoading(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, [setUserProfile]);
+  }, [setUserProfile, t]);
 
   const copyToClipboard = useCallback(async () => {
     if (!digipin) return;
@@ -157,22 +159,22 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
 
   const shareOnWhatsApp = useCallback(() => {
     if (!digipin) return;
-    const text = encodeURIComponent(`📍 मेरा DIGIPIN: ${digipin}\n🌐 Location: ${coords ? `${coords.lat.toFixed(6)}°N, ${coords.lon.toFixed(6)}°E` : 'India'}\n\nBharat Setu पर मेरा accurate पता share किया! 🇮🇳 #DIGIPIN #BharatSetu`);
+    const text = encodeURIComponent(`${t('myDigipinLabel', '📍 My DIGIPIN')}: ${digipin}\n🌐 ${t('location', 'Location')}: ${coords ? `${coords.lat.toFixed(6)}°N, ${coords.lon.toFixed(6)}°E` : t('india', 'India')}\n\n${t('digipinShareText', 'Shared my accurate address on Bharat Setu!')} 🇮🇳 #DIGIPIN #BharatSetu`);
     window.open(`https://wa.me/?text=${text}`, '_blank');
-  }, [digipin, coords]);
+  }, [digipin, coords, t]);
 
   const lookupDigipin = useCallback((code?: string) => {
     const target = (code ?? lookupInput).trim();
     if (code) setLookupInput(code); // sync input field when called from sample
     const result = decodeDigipin(target);
     if (!result) {
-      setError('Invalid DIGIPIN format. Example: FCJX-MK4-F8B (4-3-3 format)');
+      setError(t('invalidDigipinFormatExample', 'Invalid DIGIPIN format. Example: FCJX-MK4-F8B (4-3-3 format)'));
       setLookupResult(null); // clear any stale previous result
     } else {
       setLookupResult(result);
       setError('');
     }
-  }, [lookupInput]);
+  }, [lookupInput, t]);
 
   const precisionMeters = 4;
 
@@ -181,19 +183,19 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
       <FlagStripe />
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-purple-50 dark:bg-[#1a0a3a]/95 backdrop-blur-xl border-b border-purple-200 dark:border-purple-500/20">
-        <button onClick={onClose} className="p-1">
+        <button onClick={onClose} className="p-1" aria-label={t('close', 'Close')}>
           <span className="material-symbols-outlined text-slate-600 dark:text-gray-400">arrow_back</span>
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-lg">📮</span>
-            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Know Your DIGIPIN</h2>
+            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">{t('knowYourDigipin', 'Know Your DIGIPIN')}</h2>
           </div>
-          <p className="text-[10px] text-purple-600 dark:text-purple-300/70">India Post · ISRO Geocoding Technology</p>
+          <p className="text-[10px] text-purple-600 dark:text-purple-300/70">{t('indiaPostIsroGeocodingTechnology', 'India Post · ISRO Geocoding Technology')}</p>
         </div>
         <div className="flex items-center gap-1 bg-purple-100 dark:bg-purple-500/10 border border-purple-300 dark:border-purple-500/20 rounded-full px-2 py-1">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-green-400 animate-pulse"></span>
-          <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">LIVE</span>
+          <span className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">{t('live', 'LIVE')}</span>
         </div>
       </div>
 
@@ -209,7 +211,7 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
                 : 'text-slate-400 dark:text-gray-500'
             }`}
           >
-            {tab === 'detect' ? '📍 Detect My DIGIPIN' : '🔍 Lookup DIGIPIN'}
+            {tab === 'detect' ? t('detectMyDigipin', '📍 Detect My DIGIPIN') : t('lookupDigipin', '🔍 Lookup DIGIPIN')}
           </button>
         ))}
       </div>
@@ -246,10 +248,10 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
                   </>
                 ) : (
                   <>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">DIGIPIN क्या है?</h3>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">{t('whatIsDigipin', 'What is DIGIPIN?')}</h3>
                     <p className="text-xs text-slate-600 dark:text-gray-400 leading-relaxed">
-                      India Post का 10-digit digital address code।<br />
-                      हर घर, खेत, दुकान का unique pin code।
+                      {t('digipinDescriptionLine1', 'India Post\'s 10-digit digital address code.')}<br />
+                      {t('digipinDescriptionLine2', 'Unique pin code for every home, farm, and shop.')}
                     </p>
                   </>
                 )}
@@ -273,7 +275,7 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
               <span className={`material-symbols-outlined ${loading ? 'animate-spin' : ''}`}>
                 {loading ? 'sync' : 'my_location'}
               </span>
-              {loading ? 'GPS से Location ढूंढ रहे हैं...' : 'मेरा DIGIPIN पता करें'}
+              {loading ? t('detectingLocationViaGps', 'Detecting location via GPS...') : t('findMyDigipin', 'Find My DIGIPIN')}
             </button>
 
             {/* Actions when DIGIPIN is available */}
@@ -285,14 +287,14 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
                     className="flex items-center justify-center gap-2 bg-slate-100 dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-xl py-3 text-xs font-bold text-slate-900 dark:text-white transition-all active:scale-95"
                   >
                     <span className="material-symbols-outlined text-sm">{copied ? 'check_circle' : 'content_copy'}</span>
-                    {copied ? 'Copied!' : 'Copy Code'}
+                    {copied ? t('copied', 'Copied!') : t('copyCode', 'Copy Code')}
                   </button>
                   <button
                     onClick={shareOnWhatsApp}
                     className="flex items-center justify-center gap-2 bg-green-50 dark:bg-[#25D366]/10 border border-green-300 dark:border-[#25D366]/30 rounded-xl py-3 text-xs font-bold text-green-700 dark:text-[#25D366] transition-all active:scale-95"
                   >
                     <span className="material-symbols-outlined text-sm">share</span>
-                    WhatsApp Share
+                    {t('whatsappShare', 'WhatsApp Share')}
                   </button>
                 </div>
 
@@ -302,7 +304,7 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
                     className="w-full bg-gradient-to-r from-[#FF9933] to-[#138808] text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm transition-all active:scale-[0.98]"
                   >
                     <span className="material-symbols-outlined text-sm">chat</span>
-                    इस DIGIPIN को Agent Query में Use करें
+                    {t('useThisDigipinInAgentQuery', 'Use this DIGIPIN in Agent Query')}
                   </button>
                 )}
               </>
@@ -311,15 +313,15 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
             {/* Info Cards */}
             <div className="space-y-2">
               {[
-                { icon: 'local_post_office', title: 'India Post', desc: 'डाक पहुंचे घर तक, बिना पते के झंझट के', action: () => window.open('https://www.indiapost.gov.in/', '_blank') },
-                { icon: 'emergency', title: 'Emergency Services', desc: 'Ambulance & Police को exact location share करें', action: () => {
+                { icon: 'local_post_office', title: t('indiaPost', 'India Post'), desc: t('indiaPostDescription', 'Reliable postal delivery with precise addressing'), action: () => window.open('https://www.indiapost.gov.in/', '_blank') },
+                { icon: 'emergency', title: t('emergencyServices', 'Emergency Services'), desc: t('emergencyServicesDescription', 'Share exact location with ambulance and police'), action: () => {
                   if (coords) {
-                    const msg = `🚨 Emergency at DIGIPIN: ${digipin}\nLocation: ${coords.lat.toFixed(6)}°N, ${coords.lon.toFixed(6)}°E\nBing Maps: https://www.bing.com/maps?q=${coords.lat},${coords.lon}`;
+                    const msg = `🚨 ${t('emergencyAtDigipin', 'Emergency at DIGIPIN')}: ${digipin}\n${t('location', 'Location')}: ${coords.lat.toFixed(6)}°N, ${coords.lon.toFixed(6)}°E\nBing Maps: https://www.bing.com/maps?q=${coords.lat},${coords.lon}`;
                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                   }
                 } },
-                { icon: 'agriculture', title: 'Kisan Services', desc: 'PM-KISAN, fasal bima — सटीक क्षेत्र के लिए', action: () => window.open('https://pmkisan.gov.in/', '_blank') },
-                { icon: 'real_estate_agent', title: 'Property Records', desc: 'Bhulekh, पंजीकरण, nagarpalika services', action: () => window.open('https://bhulekh.gov.in/', '_blank') },
+                { icon: 'agriculture', title: t('kisanServices', 'Kisan Services'), desc: t('kisanServicesDescription', 'PM-KISAN and crop insurance for your precise area'), action: () => window.open('https://pmkisan.gov.in/', '_blank') },
+                { icon: 'real_estate_agent', title: t('propertyRecords', 'Property Records'), desc: t('propertyRecordsDescription', 'Bhulekh, registration, and municipal services'), action: () => window.open('https://bhulekh.gov.in/', '_blank') },
               ].map((item, i) => (
                 <button
                   key={i}
@@ -343,13 +345,13 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
         {activeTab === 'lookup' && (
           <>
             <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
-              <p className="text-xs font-bold text-slate-700 dark:text-gray-300 mb-3">DIGIPIN Code Enter करें</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-gray-300 mb-3">{t('enterDigipinCode', 'Enter DIGIPIN Code')}</p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={lookupInput}
                   onChange={(e) => setLookupInput(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                  placeholder="e.g. 4MF-KM4-F8K"
+                  placeholder={t('digipinExamplePlaceholder', 'e.g. 4MF-KM4-F8K')}
                   maxLength={12}
                   className="flex-1 bg-white dark:bg-[#0f1a30] border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm font-mono text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:border-purple-500 dark:focus:border-purple-400/50"
                 />
@@ -391,14 +393,14 @@ export default function DigipinLocator({ onClose, onUseInQuery }: DigipinLocator
                   className="flex items-center justify-center gap-2 w-full bg-blue-500/10 border border-blue-500/30 text-blue-300 font-bold py-2.5 rounded-xl text-xs transition-all"
                 >
                   <span className="material-symbols-outlined text-sm">map</span>
-                  Bing Maps पर देखें
+                    {t('viewOnBingMaps', 'View on Bing Maps')}
                 </a>
               </div>
             )}
 
             {/* Sample DIGIPIN codes */}
             <div className="bg-slate-100 dark:bg-white/3 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-              <p className="text-[10px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider mb-3">Sample DIGIPINs</p>
+              <p className="text-[10px] font-bold text-slate-600 dark:text-gray-400 uppercase tracking-wider mb-3">{t('sampleDigipins', 'Sample DIGIPINs')}</p>
               <div className="space-y-2">
                 {[
                   { code: '4MF-KM4-F8K', place: 'New Delhi, Central' },

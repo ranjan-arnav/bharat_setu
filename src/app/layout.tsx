@@ -1,12 +1,28 @@
 import type { Metadata, Viewport } from 'next';
 import '../styles/globals.css';
+import '@fontsource/material-symbols-outlined';
+import { Noto_Sans_Devanagari, Public_Sans } from 'next/font/google';
+
+const publicSans = Public_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800'],
+  display: 'swap',
+  variable: '--font-public-sans',
+});
+
+const notoSansDevanagari = Noto_Sans_Devanagari({
+  subsets: ['devanagari'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-noto-sans-devanagari',
+});
 
 export const metadata: Metadata = {
   title: 'Bharat Setu - भारत सेतु | Bridging the Digital Divide',
   description: 'AI-powered governance platform for 1.3 billion Indians. Access government services in 22 languages via voice. Powered by Azure AI, AutoGen, Phi-3 Mini, and ISRO DIGIPIN.',
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.svg',
+    icon: '/logo.png',
     apple: '/icons/icon-192.svg',
   },
   appleWebApp: {
@@ -32,10 +48,12 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="hi" suppressHydrationWarning>
+    <html
+      lang="hi"
+      suppressHydrationWarning
+      className={`${publicSans.variable} ${notoSansDevanagari.variable}`}
+    >
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>

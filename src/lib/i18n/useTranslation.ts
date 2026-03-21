@@ -11,8 +11,15 @@ export function useTranslation() {
   const lang = resolveLang(userProfile?.language);
   const strings: UIStrings = translations[lang] ?? translations['hi'];
 
-  function t<K extends keyof UIStrings>(key: K, fallback?: string): string {
-    return (strings[key] as string) ?? (translations['hi'][key] as string) ?? fallback ?? String(key);
+  function t(key: keyof UIStrings | (string & {}), fallback?: string): string {
+    const val = strings[key as keyof UIStrings] as string;
+    if (val) return val;
+
+    if (lang === 'en') {
+      return fallback ?? String(key);
+    }
+
+    return (translations['hi'][key as keyof UIStrings] as string) ?? fallback ?? String(key);
   }
 
   /** RTL direction flag (for Urdu / Sindhi / Kashmiri) */

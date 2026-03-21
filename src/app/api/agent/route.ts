@@ -72,7 +72,7 @@ const routingCache = new Map<string, AgentKey>();
 
 // ── GPT-4.1-mini fallback via GitHub Models (free tier, rate-limited) ──────────
 // Only used when Azure OpenAI returns 429 (rate limit). Never called on 401.
-async function callGpt41MiniFallback(
+async function _callGpt41MiniFallback(
   messages: { role: string; content: string }[],
   maxTokens: number
 ): Promise<string | null> {
@@ -314,7 +314,7 @@ async function classifyAgentWithPhi(message: string): Promise<AgentKey | null> {
 // Runs in parallel with the reply fetch — zero latency overhead.
 // Translates the message first (same Azure Translator), then uses rich few-shot prompt.
 // If it disagrees with Ministral, it wins (GPT-4o > Ministral-3B for routing).
-async function backgroundRouteCheck(
+async function _backgroundRouteCheck(
   message: string,
   apiUrl: string,
   headers: Record<string, string>,
@@ -449,7 +449,7 @@ export async function POST(request: NextRequest) {
   let reqLanguage = 'hi';
 
   try {
-    const { message, userText, agentKey, clientDetectedAgent, conversationHistory = [], language = 'hi', digipin, classifyOnly = false, citizenProfile = null } = await request.json();
+    const { message, userText, agentKey, clientDetectedAgent, conversationHistory = [], sharedContext = '', language = 'hi', digipin, classifyOnly = false, citizenProfile = null } = await request.json();
     reqMessage = message || '';
     reqAgentKey = agentKey as AgentKey;
     reqLanguage = language || 'hi';
@@ -601,7 +601,6 @@ RULES:
 5. Use simple vocabulary appropriate for a citizen who may not be tech-savvy.
 6. For emergencies, always mention 112 (National Emergency) or 108 (Ambulance).
 7. Do NOT mention other agents, do NOT suggest handoffs — you are already the correct agent.
-${!phiClassified ? `8. ROUTING (mandatory, Phi classifier unavailable): Output exactly AGENT:<key> as the very first line (no spaces, no punctuation around it), where <key> is the single best agent for this specific query from: nagarik_mitra, swasthya_sahayak, yojana_saathi, arthik_salahkar, vidhi_sahayak. Then a blank line, then your normal response. Example first line: AGENT:swasthya_sahayak` : ``}
 ${(() => {
   if (!citizenProfile) return '';
   const dobYear = citizenProfile.dob ? parseInt((citizenProfile.dob as string).split(' ').pop() || '0') : 0;
@@ -625,7 +624,13 @@ KEY INSTRUCTIONS:
 - Never suggest schemes they are already enrolled in (see enrolled list above) unless they ask.
 - Use their income and occupation to calibrate advice (e.g. don’t recommend premium products to a low-income citizen).
 - Their location/DIGIPIN determines nearby PHC, police station, and local government offices.`;
-})()}`;
+})()}
+
+${sharedContext ? `
+[SHARED MCP CONTEXT - RECENT CROSS-AGENT INTERACTIONS]
+The citizen recently spoke to other specialized agents. Use this history to seamlessly continue the conversation without asking them to repeat themselves:
+${sharedContext}
+` : ''}`;
 
     // Build messages array — cap history at 6 messages (3 turns) to save tokens
     const trimmedHistory = (conversationHistory as { role: string; content: string }[])
@@ -766,18 +771,14 @@ KEY INSTRUCTIONS:
       }
     }
 
-    // ── Extract and strip the AGENT: routing prefix emitted by GPT ───────────
+    // ── Extract and strip the AGENT: routing prefix emitted by GPT (Legacy Support) ─
     let reply = rawReply;
     const agentPrefixMatch = rawReply.match(/^AGENT:(nagarik_mitra|swasthya_sahayak|yojana_saathi|arthik_salahkar|vidhi_sahayak)[\s\n]*/i);
     if (agentPrefixMatch) {
       const gptAgent = agentPrefixMatch[1].toLowerCase() as AgentKey;
       reply = rawReply.slice(agentPrefixMatch[0].length).trim();
-      console.log(`[GPT] routing tag: ${gptAgent}`);
-      // If Phi failed and GPT disagrees with current agent, surface a handoff suggestion
-      if (!phiClassified && gptAgent !== resolvedAgentKey) {
-        suggestedAgent = gptAgent;
-        console.log(`[GPT] Phi had failed — GPT reroute suggestion: ${gptAgent}`);
-      }
+      console.log(`[GPT] stripped legacy routing tag: ${gptAgent}`);
+      // NOTE: GPT routing fallback is now disabled to strictly use Phi
     }
 
     return NextResponse.json({
@@ -792,7 +793,7 @@ KEY INSTRUCTIONS:
       resolvedAgentKey, // which agent actually answered
       usage: data.usage,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Agent API error:', error);
     // Demo fallback when AI is unavailable
     const agent = agentConfigs[reqAgentKey] || agentConfigs.nagarik_mitra;

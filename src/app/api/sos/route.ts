@@ -18,9 +18,8 @@ import {
   buildResponderList,
   buildAlertPayload,
   dispatchSOS,
-  SOSDispatchResult,
 } from '@/lib/sos-engine';
-import { sosResultCache } from '@/lib/sos-cache';
+import { setSOSDispatchResult } from '@/lib/sos-storage';
 
 export interface SOSRequestBody {
   lat: number;
@@ -42,7 +41,9 @@ export async function POST(request: NextRequest) {
     const body: SOSRequestBody = await request.json();
 
     // ── Validate required fields ─────────────────────────────────────────────
-    if (!body.lat || !body.lng || !body.digipin) {
+    const hasValidCoords = Number.isFinite(body.lat) && Number.isFinite(body.lng);
+    const hasValidDigipin = typeof body.digipin === 'string' && body.digipin.trim().length > 0;
+    if (!hasValidCoords || !hasValidDigipin) {
       return NextResponse.json(
         { error: 'lat, lng, and digipin are required' },
         { status: 400 }
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       location: {
         lat: body.lat,
         lng: body.lng,
-        digipin: body.digipin,
+        digipin: body.digipin.trim(),
         accuracy: body.accuracy || 0,
         capturedAt: Date.now(),
       },
@@ -83,11 +84,20 @@ export async function POST(request: NextRequest) {
     // ── Async fan-out (non-blocking for the HTTP response) ────────────────────
     // We launch the dispatch and immediately return the eventId.
     // The client polls /api/sos/status?id=<eventId> for live results.
-    dispatchSOS(payload).then((result) => {
-      sosResultCache.set(result.eventId, result);
-      // Purge after 1 hour to avoid memory leaks
-      setTimeout(() => sosResultCache.delete(result.eventId), 60 * 60 * 1000);
-    });
+    dispatchSOS(payload)
+      .then((result) => {
+        return setSOSDispatchResult(result.eventId, result);
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Dispatch failed';
+        console.error('[SOS Dispatch] Unhandled dispatch failure:', message);
+        return setSOSDispatchResult(payload.eventId, {
+          eventId: payload.eventId,
+          results: [],
+          dispatchedAt: Date.now(),
+          allNotified: false,
+        });
+      });
 
     // ── Send ONE consolidated SMS ────────────────────────────────
     const coords = `${body.lat.toFixed(5)},${body.lng.toFixed(5)}`;
@@ -107,10 +117,10 @@ Accuracy:${body.accuracy || 0}m
 Coords:${coords}
 Needs help. Dispatch immediately.`;
 
-    const appBase = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const smsEndpoint = new URL('/api/sos/sms', request.url).toString();
 
     // Send single SMS to reduce costs
-    fetch(`${appBase}/api/sos/sms`, {
+    fetch(smsEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: smsText, eventId: payload.eventId }),

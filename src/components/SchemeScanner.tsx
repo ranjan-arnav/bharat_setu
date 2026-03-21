@@ -75,21 +75,21 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
     : schemes;
 
   const scanSteps = [
-    'Loading citizen profile...',
-    'Matching government schemes database...',
-    'Calculating eligibility scores...',
-    'Checking scheme saturation...',
-    'Generating personalized results...',
+    t('loadingCitizenProfile', 'Loading citizen profile...'),
+    t('matchingGovernmentSchemesDatabase', 'Matching government schemes database...'),
+    t('calculatingEligibilityScores', 'Calculating eligibility scores...'),
+    t('checkingSchemeSaturation', 'Checking scheme saturation...'),
+    t('generatingPersonalizedResults', 'Generating personalized results...'),
   ];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'registered':
-        return <span className="text-[9px] font-bold bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full border border-green-500/30">✓ Registered</span>;
+        return <span className="text-[9px] font-bold bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full border border-green-500/30">{t('registeredStatus', '✓ Registered')}</span>;
       case 'eligible':
-        return <span className="text-[9px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">Eligible</span>;
+        return <span className="text-[9px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">{t('eligibleStatus', 'Eligible')}</span>;
       default:
-        return <span className="text-[9px] font-bold bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">Not Applied</span>;
+        return <span className="text-[9px] font-bold bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">{t('notAppliedStatus', 'Not Applied')}</span>;
     }
   };
 
@@ -103,13 +103,13 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
         </button>
         <div className="flex-1">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            🧬 Scheme DNA Scanner
+            {t('schemeDnaScannerTitle', '🧬 Scheme DNA Scanner')}
           </h2>
-          <p className="text-[10px] text-slate-500 dark:text-gray-400">AI-powered eligibility matching for 800+ schemes</p>
+          <p className="text-[10px] text-slate-500 dark:text-gray-400">{t('aiEligibilityMatchingFor800Schemes', 'AI-powered eligibility matching for 800+ schemes')}</p>
         </div>
         <div className="flex items-center gap-1 bg-amber-500/20 px-2 py-1 rounded-full">
           <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse"></span>
-          <span className="text-[9px] text-amber-400 font-bold">Yojana Saathi</span>
+          <span className="text-[9px] text-amber-400 font-bold">{t('yojanaSaathi', 'Yojana Saathi')}</span>
         </div>
       </div>
 
@@ -135,15 +135,15 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
             {/* Profile being scanned */}
             <div className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-3 space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500 dark:text-gray-400">DIGIPIN</span>
+                <span className="text-slate-500 dark:text-gray-400">{t('DIGIPIN')}</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-white">{userProfile.digipin}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500 dark:text-gray-400">Occupation</span>
-                <span className="font-bold text-slate-900 dark:text-white">{userProfile.occupation}</span>
+                <span className="text-slate-500 dark:text-gray-400">{t('occupation', 'Occupation')}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{t(userProfile.occupation, userProfile.occupation)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500 dark:text-gray-400">Annual Income</span>
+                <span className="text-slate-500 dark:text-gray-400">{t('annualIncome', 'Annual Income')}</span>
                 <span className="font-bold text-slate-900 dark:text-white">₹{(userProfile.income / 1000).toFixed(0)}K</span>
               </div>
             </div>
@@ -172,10 +172,10 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
               <span className="material-symbols-outlined text-green-400 text-2xl">verified</span>
               <div>
                 <p className="text-sm font-bold text-slate-900 dark:text-white">
-                  {schemes.length} Schemes Matched!
+                  {schemes.length} {t('schemesMatchedTitle', 'Schemes Matched!')}
                 </p>
                 <p className="text-[10px] text-slate-500 dark:text-gray-400">
-                  Based on your profile analysis using Azure AI Search
+                  {t('basedOnProfileAnalysisUsingAzureAiSearch', 'Based on your profile analysis using Azure AI Search')}
                 </p>
               </div>
             </div>
@@ -187,7 +187,7 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search schemes..."
+                placeholder={t('Search schemes...')}
                 className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 outline-none focus:border-[#FF9933]/40"
               />
             </div>
@@ -206,7 +206,7 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <div className="bg-gradient-to-r from-[#FF9933] to-[#138808] text-slate-900 dark:text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {scheme.match_score}% Match
+                      {scheme.match_score}% {t('Match')}
                     </div>
                     {getStatusBadge(scheme.status)}
                   </div>
@@ -224,11 +224,11 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
                 {selectedScheme?.scheme_name === scheme.scheme_name && (
                   <div className="mt-3 pt-3 border-t border-black/10 dark:border-white/10 space-y-3" onClick={(e) => e.stopPropagation()}>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">Eligibility</p>
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{t('Eligibility')}</p>
                       <p className="text-xs text-slate-600 dark:text-gray-300">{scheme.eligibility}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{t("requiredDocuments")}</p>
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase mb-1">{t('requiredDocuments', 'Required Documents')}</p>
                       <div className="flex flex-wrap gap-1">
                         {scheme.docs_needed?.map((doc) => (
                           <span key={doc} className="text-[10px] bg-blue-500/15 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-500/20">
@@ -254,7 +254,7 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
                       className="block w-full bg-gradient-to-r from-[#FF9933] to-[#E68A2E] text-slate-900 dark:text-white text-center font-bold py-2.5 rounded-xl text-sm cursor-pointer hover:shadow-lg hover:shadow-[#FF9933]/20 transition-all flex items-center justify-center gap-2"
                     >
                       <span className="material-symbols-outlined text-sm">chat_bubble</span>
-                      Apply via Yojana Saathi Agent
+                      {t('Apply via Yojana Saathi Agent')}
                     </button>
                   </div>
                 )}
@@ -270,7 +270,7 @@ export default function SchemeScanner({ onClose }: { onClose: () => void }) {
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2">
                   <span className="material-symbols-outlined text-amber-400 text-sm mt-0.5">info</span>
                   <p className="text-[10px] text-amber-700 dark:text-amber-300/80">
-                    <strong>Scheme Saturation Score: {saturationPct}%</strong> — You&apos;re registered in {registeredCount} of {totalCount} top eligible schemes. Let Yojana Saathi auto-fill your remaining applications.
+                    <strong>{t('Scheme Saturation Score:')} {saturationPct}%</strong> — {t("You're registered in")} {registeredCount} {t("of")} {totalCount} {t("top eligible schemes. Let Yojana Saathi auto-fill your remaining applications.")}
                   </p>
                 </div>
               );

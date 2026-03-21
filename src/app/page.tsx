@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import Image from 'next/image';
 import BottomNav from '@/components/BottomNav';
+import GovBottomNav from '@/components/GovBottomNav';
 import ScreenDrawer from '@/components/ScreenDrawer';
 import Onboarding from '@/components/Onboarding';
 import AgentChat from '@/components/AgentChat';
@@ -11,20 +13,31 @@ import VoiceAssistant from '@/components/VoiceAssistant';
 import ImpactDashboard from '@/components/ImpactDashboard';
 import DigipinLocator from '@/components/DigipinLocator';
 import EmergencyContactsManager from '@/components/EmergencyContactsManager';
+import GovDashboard from '@/components/GovDashboard';
+import GovCaseManagement from '@/components/GovCaseManagement';
+import GovAnalytics from '@/components/GovAnalytics';
+import GovAlerts from '@/components/GovAlerts';
+import GovAdmin from '@/components/GovAdmin';
+import SOSHardwareTrigger from '@/components/SOSHardwareTrigger';
 import { SCREENS, type ScreenKey } from '@/lib/screens';
+import { translations } from '@/lib/i18n/translations';
 import { useAppStore, type AgentKey } from '@/lib/store';
 import TrackCasesOverlay from '@/components/TrackCasesOverlay';
-import SOSButton from '@/components/SOSButton';
-import { FlagStripe, AshokaChakra } from '@/components/ui/GoiElements';
+import ProfileTab from '@/components/ProfileTab';
+import SchemeScannerScreen from '@/components/screens/SchemeScanner';
+import BureaucracyXRay from '@/components/screens/BureaucracyXRay';
+import CivicKarma from '@/components/screens/CivicKarma';
+import { FlagStripe } from '@/components/ui/GoiElements';
 import { useTranslation } from '@/lib/i18n/useTranslation';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function HomePage() {
   const [activeScreen, setActiveScreen] = useState<ScreenKey>('home');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [govTab, setGovTab] = useState('home');
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const { activeOverlay, setOverlay, setActiveAgent, onboardingComplete, userProfile, citizenProfile, trackedItems, karmaScore } = useAppStore();
+  const { activeOverlay, setOverlay, setActiveAgent, onboardingComplete, userProfile, citizenProfile, trackedItems, karmaScore, isAuthenticated, userType, logout } = useAppStore();
   const { t, lang } = useTranslation();
 
   const navigateTo = useCallback((screen: ScreenKey) => {
@@ -75,14 +88,16 @@ export default function HomePage() {
       // Push user profile data directly into iframe DOM (same-origin)
       try {
         const firstName = userProfile.name ? userProfile.name.split(' ')[0] : 'नागरिक';
+        const greetPrefix = t('namasteGreeting', 'Namaste');
         const greetEl = doc.getElementById('user-greeting') as HTMLElement | null;
-        if (greetEl) greetEl.textContent = `Namaste, ${firstName}!`;
+        if (greetEl) greetEl.textContent = `${greetPrefix}, ${firstName}!`;
         const dpEl = doc.getElementById('digipin-display') as HTMLElement | null;
         if (dpEl && userProfile.digipin) dpEl.textContent = userProfile.digipin;
         const dateEl = doc.getElementById('current-date') as HTMLElement | null;
         if (dateEl) {
           const d = new Date();
-          dateEl.textContent = d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
+          const loc = lang === 'hi' ? 'hi-IN' : lang === 'en' ? 'en-IN' : `${lang}-IN`;
+          dateEl.textContent = d.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'short' });
         }
       } catch { /* ignore sub-DOM errors */ }
 
@@ -104,6 +119,7 @@ export default function HomePage() {
           action: 'user-update',
           name: userProfile.name,
           digipin: userProfile.digipin,
+          greetingPrefix: t('namasteGreeting', 'Namaste'),
           district: citizenProfile?.district ?? '',
           state: citizenProfile?.state ?? '',
           income: citizenProfile?.income != null ? String(citizenProfile.income) : '',
@@ -121,6 +137,43 @@ export default function HomePage() {
         '*',
       );
 
+        const activeLangDict = translations[lang] || translations['en'];
+
+      // Send translated dashboard strings to iframe
+      iframe.contentWindow?.postMessage(
+        {
+          source: 'bharat-setu-parent',
+          action: 'apply-translations',
+          translations: {
+            ...activeLangDict,
+            greeting: t('namasteGreeting', 'Namaste'),
+            helpToday: t('helpToday', 'How can we help today?'),
+            tapToSpeak: t('tapToSpeak', 'Tap to Speak / बोलें'),
+            allLangsSupported: t('allLangsSupported', 'All 22 official languages supported'),
+            councilTitle: t('councilTitle', 'Council of Five Agents'),
+            viewAll: t('viewAll', 'View All'),
+            agentNM: t('agentNM', 'Nagarik Mitra'),
+            agentNMSub: t('agentNMSub', 'Civic Services'),
+            agentSS: t('agentSS', 'Swasthya Sahayak'),
+            agentSSSub: t('agentSSSub', 'Health & Care'),
+            agentYS: t('agentYS', 'Yojana Saathi'),
+            agentYSSub: t('agentYSSub', 'Welfare Schemes'),
+            agentAS: t('agentAS', 'Arthik Salahkar'),
+            agentASSub: t('agentASSub', 'Finance & Loans'),
+            agentVS: t('agentVS', 'Vidhi Sahayak'),
+            agentVSSub: t('agentVSSub', 'Legal Aid & Rights'),
+            isroActive: t('isroActive', 'ISRO DIGIPIN Active'),
+            digipinPrecision: t('digipinPrecision', 'Precision: 4x4m Grid • Tap to Know Your DIGIPIN 📮'),
+            navHome: t('navHome', 'Home'),
+            navSchemes: t('navSchemes', 'Schemes'),
+            navScan: t('navScan', 'Scan'),
+            navDocs: t('navDocs', 'Docs'),
+            navProfile: t('navProfile', 'Profile'),
+          },
+        },
+        '*',
+      );
+
       // Direct DOM injection for all screens (same-origin fallback)
       try {
         const d = doc;
@@ -130,7 +183,7 @@ export default function HomePage() {
         const firstName = userProfile.name ? userProfile.name.split(' ')[0] : '\u0928\u093e\u0917\u0930\u093f\u0915';
         // welfare
         const wg = d.getElementById('welfare-greeting') as HTMLElement | null;
-        if (wg) wg.textContent = `Namaste, ${firstName}! \uD83D\uDE4F`;
+        if (wg) wg.textContent = `${t('namasteGreeting', 'Namaste')}, ${firstName}! \uD83D\uDE4F`;
         const wob = d.getElementById('welfare-occupation-badge') as HTMLElement | null;
         if (wob && citizenProfile?.occupation) wob.textContent = citizenProfile.occupation.split('(')[0].trim();
         const wlb = d.getElementById('welfare-location-badge') as HTMLElement | null;
@@ -191,7 +244,7 @@ export default function HomePage() {
     } catch {
       // cross-origin fallback - silently ignore
     }
-  }, [userProfile, citizenProfile, trackedItems, karmaScore]);
+  }, [userProfile, citizenProfile, trackedItems, karmaScore, lang, t]);
 
   // Reload bridge on screen change
   useEffect(() => {
@@ -228,7 +281,6 @@ export default function HomePage() {
           else if (data.overlay === 'grievance') setOverlay('grievance');
           else if (data.overlay === 'scheme-scanner') setOverlay('scheme-scanner');
           else if (data.overlay === 'scam-alert') setOverlay('scam-alert');
-          else if (data.overlay === 'sos-active') setOverlay('sos-active');
           else if (data.overlay === 'digipin') setOverlay('digipin');
           else if (data.overlay === 'emergency-contacts') setOverlay('emergency-contacts');
           break;
@@ -287,81 +339,167 @@ export default function HomePage() {
 
   return (
     <div className="relative w-full h-[100dvh] max-w-[430px] mx-auto overflow-hidden bg-slate-50 dark:bg-navy">
-      {/* GoI Brand Bar */}
-      <div className="w-full bg-slate-50 dark:bg-navy z-30 relative">
-        <FlagStripe thick />
-        <div className="flex items-center justify-between px-4 py-2.5 bg-slate-100 dark:bg-[#071020]">
-          <div className="flex items-center gap-3">
-            <AshokaChakra size={28} color="#5b8def" spin />
-            <div>
-              <div className="text-base font-black text-slate-900 dark:text-white tracking-wider leading-tight">भारत सेतु</div>
-              <div className="text-[9px] text-[#5b8def] tracking-widest font-medium uppercase">Bharat Setu · Digital India</div>
-            </div>
+
+      {/* Global SOS Hardware Trigger — only when authenticated */}
+      {isAuthenticated && <SOSHardwareTrigger />}
+
+      {/* GoI Brand Bar — different for government */}
+      {userType === 'government' ? (
+        <div className="w-full bg-white dark:bg-[#050d1a] z-30 relative">
+          <div className="w-full h-[3px] flex">
+            <div className="flex-1 bg-[#138808]" />
+            <div className="flex-1 bg-black/10 dark:bg-white/20" />
+            <div className="flex-1 bg-[#138808]" />
           </div>
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <div className="text-[9px] text-slate-500 dark:text-gray-400 text-right">
-              <div className="text-[#FF9933] font-bold text-sm">सत्यमेव जयते</div>
-              <div>Govt. of India</div>
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-[#050d1a]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#138808]/15 dark:bg-[#138808]/20 border border-[#138808]/30 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[#138808] text-lg">shield</span>
+              </div>
+              <div>
+                <div className="text-base font-black text-slate-900 dark:text-white tracking-wider leading-tight">{t('bharatSetu', 'Bharat Setu')}</div>
+                <div className="text-[9px] text-[#138808] tracking-widest font-bold uppercase">{t('govAdminPanel', 'Government Admin Panel')}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              {isAuthenticated && (
+                <button onClick={logout} className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors" title={t('logout', 'Logout')}>
+                  <span className="material-symbols-outlined text-[16px] text-red-400">logout</span>
+                </button>
+              )}
+              <div className="text-[9px] text-right">
+                <div className="text-[#138808] font-bold text-sm">{t('janSeva', 'Jan Seva')}</div>
+                <div className="text-slate-500 dark:text-gray-400">{t('districtMagistrate', 'District Magistrate')}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="w-full bg-slate-50 dark:bg-navy z-30 relative">
+          <FlagStripe thick />
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-100 dark:bg-[#071020]">
+            <div className="flex items-center gap-3">
+              <Image src="/logo.png" alt="Bharat Setu Logo" width={32} height={32} className="w-8 h-8 drop-shadow-sm" />
+              <div>
+                <div className="text-base font-black text-slate-900 dark:text-white tracking-wider leading-tight">{t('bharatSetu', 'Bharat Setu')}</div>
+                <div className="text-[9px] text-[#5b8def] tracking-widest font-medium uppercase">{t('bharatSetuDigitalIndia', 'Bharat Setu · Digital India')}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              {isAuthenticated && (
+                <button onClick={logout} className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors" title={t('logout', 'Logout')}>
+                  <span className="material-symbols-outlined text-[16px] text-red-400">logout</span>
+                </button>
+              )}
+              <div className="text-[9px] text-slate-500 dark:text-gray-400 text-right">
+                <div className="text-[#FF9933] font-bold text-sm">{t('satyamevaJayate', 'Satyameva Jayate')}</div>
+                <div>{t('govtOfIndia', 'Govt. of India')}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Onboarding — shown on first launch */}
       {!onboardingComplete && <Onboarding />}
-      {/* Stitch Screen iframe - the main content */}
-      <iframe
-        ref={iframeRef}
-        src={SCREENS[activeScreen].file}
-        className="w-full h-full border-0 bg-slate-50 dark:bg-navy transition-colors duration-300"
-        title={SCREENS[activeScreen].label}
-        style={{ height: 'calc(100dvh - 72px - 58px)' }}
-      />
 
-      {/* Services / Sub-screens Drawer */}
-      <ScreenDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onNavigate={(screen) => {
-          // Map drawer agent clicks to chat overlay instead of iframe
-          const agentScreenMap: Record<string, AgentKey> = {
-            civic: 'nagarik_mitra',
-            health: 'swasthya_sahayak',
-            welfare: 'yojana_saathi',
-            finance: 'arthik_salahkar',
-            legal: 'vidhi_sahayak',
-          };
-          if (agentScreenMap[screen]) {
-            openAgentChat(agentScreenMap[screen]);
-            setDrawerOpen(false);
-          } else if (screen === 'scheme-scanner') {
-            setOverlay('scheme-scanner');
-            setDrawerOpen(false);
-          } else {
-            navigateTo(screen);
-            setDrawerOpen(false);
-          }
-        }}
-        activeScreen={activeScreen}
-      />
+      {/* ═══ CONTENT AREA — different for Government vs Citizen ═══ */}
+      {userType === 'government' ? (
+        /* Government: full-screen dashboard replaces iframe */
+        <div style={{ height: 'calc(100dvh - 72px - 58px)' }} className="bg-slate-50 dark:bg-[#050d1a]">
+          {govTab === 'home' && <GovDashboard />}
+          {govTab === 'cases' && <GovCaseManagement />}
+          {govTab === 'analytics' && <GovAnalytics />}
+          {govTab === 'alerts' && <GovAlerts />}
+          {govTab === 'admin' && <GovAdmin />}
+        </div>
+      ) : (
+        /* Citizen: existing iframe + profile layout */
+        <>
+          {activeScreen === 'profile' && (
+            <div style={{ height: 'calc(100dvh - 72px - 58px)' }}>
+              <ProfileTab />
+            </div>
+          )}
+          {activeScreen === 'scheme-scanner' && (
+            <div style={{ height: 'calc(100dvh - 72px - 58px)' }} className="absolute inset-x-0 bottom-[72px] z-10 bg-slate-50 dark:bg-[#071020]">
+              <SchemeScannerScreen />
+            </div>
+          )}
+          {activeScreen === 'xray-tracker' && (
+            <div style={{ height: 'calc(100dvh - 72px - 58px)' }} className="absolute inset-x-0 bottom-[72px] z-10 bg-slate-50 dark:bg-[#071020]">
+              <BureaucracyXRay />
+            </div>
+          )}
+          {activeScreen === 'karma' && (
+            <div style={{ height: 'calc(100dvh - 72px - 58px)' }} className="absolute inset-x-0 bottom-[72px] z-10 bg-slate-50 dark:bg-[#071020]">
+              <CivicKarma />
+            </div>
+          )}
+          <iframe
+            ref={iframeRef}
+            src={SCREENS[activeScreen as ScreenKey]?.file || ''}
+            className={`w-full h-full border-0 bg-slate-50 dark:bg-navy transition-colors duration-300 ${['profile', 'scheme-scanner', 'xray-tracker', 'karma'].includes(activeScreen) ? 'hidden' : 'block'}`}
+            title={SCREENS[activeScreen]?.label || 'App Content'}
+            style={{ height: 'calc(100dvh - 72px - 58px)' }}
+          />
+        </>
+      )}
 
-      {/* Bottom Navigation Overlay */}
-      <BottomNav
-        activeTab={activeTab}
-        onNavigate={(screen) => {
-          if (screen === 'community') {
-            setOverlay('impact');
-          } else if (screen === 'sos') {
-            setOverlay('sos-active');
-          } else if (screen === 'cases') {
-            useAppStore.getState().clearTrackBadge();
-            setOverlay('track');
-          } else {
-            navigateTo(screen);
-          }
-        }}
-        onServicesOpen={() => setDrawerOpen(!drawerOpen)}
-      />
+      {/* Bottom Navigation — different for government */}
+      {userType === 'government' ? (
+        <GovBottomNav
+          activeTab={govTab}
+          onNavigate={(tab) => {
+            if (tab === 'cases') useAppStore.getState().clearTrackBadge();
+            setGovTab(tab);
+          }}
+        />
+      ) : (
+        <>
+          <ScreenDrawer
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            onNavigate={(screen) => {
+              const agentScreenMap: Record<string, AgentKey> = {
+                civic: 'nagarik_mitra',
+                health: 'swasthya_sahayak',
+                welfare: 'yojana_saathi',
+                finance: 'arthik_salahkar',
+                legal: 'vidhi_sahayak',
+              };
+              if (agentScreenMap[screen]) {
+                openAgentChat(agentScreenMap[screen]);
+                setDrawerOpen(false);
+              } else if (screen === 'scheme-scanner') {
+                setOverlay('scheme-scanner');
+                setDrawerOpen(false);
+              } else {
+                navigateTo(screen);
+                setDrawerOpen(false);
+              }
+            }}
+            activeScreen={activeScreen}
+          />
+          <BottomNav
+            activeTab={activeTab}
+            onNavigate={(screen) => {
+              if (screen === 'community') {
+                setOverlay('impact');
+              } else if (screen === 'sos') {
+                setOverlay('sos-active');
+              } else if (screen === 'cases') {
+                useAppStore.getState().clearTrackBadge();
+                setOverlay('track');
+              } else {
+                navigateTo(screen);
+              }
+            }}
+            onServicesOpen={() => setDrawerOpen(!drawerOpen)}
+          />
+        </>
+      )}
 
       {/* ===== OVERLAY SYSTEM ===== */}
 
@@ -435,7 +573,7 @@ export default function HomePage() {
             <div className="flex-1 text-center">
               <h2 className="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center justify-center gap-2">
                 <span className="material-symbols-outlined">warning</span>
-                Scam Alert System
+                {t('scamAlertSystem', 'Scam Alert System')}
               </h2>
             </div>
           </div>
@@ -446,18 +584,21 @@ export default function HomePage() {
             <div className="text-center">
               <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{t('scamAlertTitle')}</h3>
               <p className="text-sm text-slate-500 dark:text-gray-400 leading-relaxed">
-                Powered by Azure Content Safety + custom Phi-3 Mini threat model.
-                Monitors incoming calls, SMS, and UPI requests for fraud patterns.
+                {t('scamAlertPowered', 'Powered by Azure Content Safety + custom Phi-3 Mini threat model.')}
+                {' '}
+                {t('scamAlertMonitoring', 'Monitors incoming calls, SMS, and UPI requests for fraud patterns.')}
               </p>
             </div>
             <div className="w-full space-y-3">
               {[
-                { icon: 'call', label: 'Suspicious call from +91-XXXX blocked', ts: Date.now() - 2 * 60000, severity: 'high' },
-                { icon: 'sms', label: 'Fake KYC SMS detected and quarantined', ts: Date.now() - 65 * 60000, severity: 'medium' },
-                { icon: 'account_balance', label: 'UPI phishing link flagged', ts: Date.now() - 3 * 3600000, severity: 'high' },
+                { icon: 'call', label: t('scamLabelCallBlocked', 'Suspicious call from +91-XXXX blocked'), ts: Date.now() - 2 * 60000, severity: 'high' },
+                { icon: 'sms', label: t('scamLabelSmsQuarantined', 'Fake KYC SMS detected and quarantined'), ts: Date.now() - 65 * 60000, severity: 'medium' },
+                { icon: 'account_balance', label: t('scamLabelUpiFlagged', 'UPI phishing link flagged'), ts: Date.now() - 3 * 3600000, severity: 'high' },
               ].map((alert, i) => {
                 const diffMs = Date.now() - alert.ts;
-                const timeLabel = diffMs < 3600000 ? `${Math.max(1, Math.floor(diffMs / 60000))} min ago` : `${Math.floor(diffMs / 3600000)} hrs ago`;
+                const timeLabel = diffMs < 3600000
+                  ? `${Math.max(1, Math.floor(diffMs / 60000))} ${t('minutesAgoShort', 'min ago')}`
+                  : `${Math.floor(diffMs / 3600000)} ${t('hoursAgoShort', 'hrs ago')}`;
                 return (
                   <div key={i} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-3 flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${alert.severity === 'high' ? 'bg-red-500/20' : 'bg-amber-500/20'}`}>
@@ -480,11 +621,6 @@ export default function HomePage() {
             </button>
           </div>
         </div>
-      )}
-
-      {/* SOS Active Overlay — full async dispatch system */}
-      {activeOverlay === 'sos-active' && (
-        <SOSButton onClose={() => setOverlay('none')} />
       )}
     </div>
   );

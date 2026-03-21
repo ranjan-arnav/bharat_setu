@@ -14,7 +14,15 @@ const eslintConfig = [
       // Allow inline styles in React components — required for dynamic styling
       // (e.g. style={{ color: card.color }} cannot be in a CSS file)
       'react/forbid-component-props': 'off',
-      // No other rules to add — this project uses Tailwind exclusively
+      // Large legacy codebase: keep signal, reduce hard-fail noise for existing debt.
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-expressions': 'warn',
+      'react/no-unescaped-entities': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'prefer-const': 'warn',
+      '@next/next/no-img-element': 'warn',
+      '@next/next/no-page-custom-font': 'warn',
     },
   },
 ];

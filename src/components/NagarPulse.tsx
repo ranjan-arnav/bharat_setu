@@ -29,7 +29,6 @@ const NEIGHBOURHOOD_ISSUES: NeighbourIssue[] = [
  * Red zone ≥ 80%, Amber 50–79%, Green < 50%
  */
 function LokPalMeter({ value }: { value: number }) {
-  const { t } = useTranslation();
   const meterColor =
     value >= 80 ? '#EF4444' :
       value >= 50 ? '#F59E0B' :
@@ -77,7 +76,11 @@ export default function NagarPulse() {
   const handleJoin = (label: string) => {
     setJoined(prev => {
       const next = new Set(prev);
-      next.has(label) ? next.delete(label) : next.add(label);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
       return next;
     });
   };
@@ -98,10 +101,10 @@ export default function NagarPulse() {
         </div>
         <div>
           <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-            NagarSamwad Pulse
+            {t('NagarSamwad Pulse', 'NagarSamwad Pulse')}
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20">{t("live")}</span>
           </div>
-          <div className="text-[10px] text-slate-500 dark:text-gray-400">DIGIPIN Zone: {digipinZone} · {locationLabel}</div>
+          <div className="text-[10px] text-slate-500 dark:text-gray-400">{t('DIGIPIN Zone:', 'DIGIPIN Zone:')} {digipinZone} · {locationLabel}</div>
         </div>
       </div>
 
@@ -116,7 +119,7 @@ export default function NagarPulse() {
             <span className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow shadow-orange-500/50 -mr-1.5"></span>
           </div>
         </div>
-        <div className="text-[9px] text-gray-500 mt-1">⚡ High activity — collective action boosts resolution 5×</div>
+        <div className="text-[9px] text-gray-500 mt-1">⚡ {t('High activity — collective action boosts resolution 5×', 'High activity — collective action boosts resolution 5×')}</div>
       </div>
 
       {/* Issue list */}
@@ -138,7 +141,7 @@ export default function NagarPulse() {
                   {issue.emoji}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-700 dark:text-gray-200 leading-tight truncate">{issue.label}</div>
+                  <div className="text-xs font-semibold text-slate-700 dark:text-gray-200 leading-tight truncate">{t(issue.label, issue.label)}</div>
                   <LokPalMeter value={issue.pressure} />
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
@@ -147,7 +150,7 @@ export default function NagarPulse() {
                   >
                     {TREND_ICON[issue.trend]} {issue.count}
                   </span>
-                  <span className="text-[9px] text-gray-500">neighbours</span>
+                  <span className="text-[9px] text-gray-500">{t('neighbours', 'neighbours')}</span>
                 </div>
               </button>
 
@@ -159,12 +162,12 @@ export default function NagarPulse() {
                 >
                   {issue.refId && (
                     <div className="text-[10px] text-slate-500 dark:text-gray-400 mb-2">
-                      📋 Ref: <span className="text-slate-900 dark:text-white font-semibold">{issue.refId}</span>
+                      📋 {t('Ref:', 'Ref:')} <span className="text-slate-900 dark:text-white font-semibold">{issue.refId}</span>
                     </div>
                   )}
                   <div className="text-[10px] text-slate-500 dark:text-gray-400 mb-3">
-                    {issue.count} residents in {digipinZone} zone have raised <strong className="text-slate-900 dark:text-white">{issue.label}</strong>. Joining makes it{' '}
-                    <strong className="text-[#FF9933]">5× more likely to resolve</strong> in 48 hrs.
+                    {issue.count} {t('residents in', 'residents in')} {digipinZone} {t('zone have raised', 'zone have raised')} <strong className="text-slate-900 dark:text-white">{t(issue.label, issue.label)}</strong>. {t('Joining makes it', 'Joining makes it')}{' '}
+                    <strong className="text-[#FF9933]">{t('5× more likely to resolve', '5× more likely to resolve')}</strong> {t('in 48 hrs.', 'in 48 hrs.')}
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleJoin(issue.label); }}
@@ -174,8 +177,8 @@ export default function NagarPulse() {
                       }`}
                   >
                     {isJoined
-                      ? `✓ आप जुड़ गए — ${issue.count + 1} collective voices`
-                      : `🤝 Join ${issue.count} Neighbours`}
+                      ? `✓ ${t('आप जुड़ गए —', 'आप जुड़ गए —')} ${issue.count + 1} ${t('collective voices', 'collective voices')}`
+                      : `🤝 ${t('Join', 'Join')} ${issue.count} ${t('Neighbours', 'Neighbours')}`}
                   </button>
                 </div>
               )}
@@ -189,7 +192,7 @@ export default function NagarPulse() {
         <span className="text-[10px] text-gray-500">{t("poweredByDigipin")}</span>
         <div className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-          <span className="text-[10px] text-green-400">Live sync</span>
+          <span className="text-[10px] text-green-400">{t('Live sync', 'Live sync')}</span>
         </div>
       </div>
     </div>

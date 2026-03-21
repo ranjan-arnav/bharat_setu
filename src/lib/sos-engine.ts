@@ -111,8 +111,8 @@ export function encodeDigipin(lat: number, lng: number): string {
    * through the 20-char charset via modulo.  Produces 10 characters total.
    */
   const chars: string[] = [];
-  let latBits = Math.floor(normLat * (1 << 20));
-  let lngBits = Math.floor(normLng * (1 << 20));
+  const latBits = Math.floor(normLat * (1 << 20));
+  const lngBits = Math.floor(normLng * (1 << 20));
 
   for (let i = 0; i < 10; i++) {
     // Take 2 bits from each axis → 4-bit index → pick from 20-char set via %

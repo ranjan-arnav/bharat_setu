@@ -14,6 +14,11 @@ interface SMSRequestBody {
     eventId?: string;
 }
 
+interface Fast2SMSResponse {
+    return?: boolean;
+    message?: string;
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body: SMSRequestBody = await request.json();
@@ -41,7 +46,26 @@ export async function POST(request: NextRequest) {
             signal: AbortSignal.timeout(10_000),
         });
 
-        const data = await res.json();
+        const contentType = res.headers.get('content-type') || '';
+        let data: Fast2SMSResponse = {};
+
+        if (contentType.includes('application/json')) {
+            try {
+                data = (await res.json()) as Fast2SMSResponse;
+            } catch {
+                data = { message: 'Invalid JSON from SMS provider' };
+            }
+        } else {
+            const raw = await res.text();
+            data = { message: raw || `SMS provider returned HTTP ${res.status}` };
+        }
+
+        if (!res.ok) {
+            const providerError = data.message || `SMS provider error (${res.status})`;
+            console.error(`[Fast2SMS] ❌ HTTP error:`, providerError);
+            return NextResponse.json({ success: false, error: providerError }, { status: 502 });
+        }
+
         if (data.return === true) {
             console.log(`[Fast2SMS] ✅ SMS sent to ${PHONE}`);
             return NextResponse.json({ success: true, phone: PHONE, eventId: body.eventId || null, sentAt: new Date().toISOString() });

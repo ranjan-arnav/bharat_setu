@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sosResultCache } from '@/lib/sos-cache';
+import { getSOSDispatchResult } from '@/lib/sos-storage';
 
 export async function GET(request: NextRequest) {
   const eventId = request.nextUrl.searchParams.get('id');
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing event id' }, { status: 400 });
   }
 
-  const result = sosResultCache.get(eventId);
+  const result = await getSOSDispatchResult(eventId);
 
   if (!result) {
     // Dispatch still running — return pending state

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
+import { getRoleFromKarma, type UserRole } from './permissions';
+import type { CollectiveCluster } from './intelligence';
 
-export type AgentKey = 'nagarik_mitra' | 'swasthya_sahayak' | 'yojana_saathi' | 'arthik_salahkar' | 'vidhi_sahayak';
+export type UserType = 'citizen' | 'government';
+
+export type AgentKey = 'nagarik_mitra' | 'swasthya_sahayak' | 'yojana_saathi' | 'arthik_salahkar' | 'vidhi_sahayak' | 'kisan_mitra';
 export type OverlayType = 'none' | 'agent-chat' | 'grievance' | 'scheme-scanner' | 'voice' | 'impact' | 'scam-alert' | 'sos-active' | 'digipin' | 'track' | 'emergency-contacts';
 export type TrackedItemType = 'grievance' | 'scheme' | 'health' | 'legal' | 'finance';
 
@@ -58,6 +62,14 @@ interface ChatMessage {
   timestamp: number;
   agentKey?: AgentKey;
   imageUrl?: string;
+  imageAlt?: string;
+}
+
+export interface ActiveForm {
+  type: string;
+  title: string;
+  fields: { name: string; label: string; autofillSource?: string }[];
+  documents?: string[];
 }
 
 interface Grievance {
@@ -71,6 +83,13 @@ interface Grievance {
 }
 
 interface AppState {
+  // Auth
+  isAuthenticated: boolean;
+  userType: UserType;
+  role: UserRole;
+  login: (name: string, userType: UserType) => void;
+  logout: () => void;
+
   // Overlay management
   activeOverlay: OverlayType;
   setOverlay: (overlay: OverlayType) => void;
@@ -129,12 +148,43 @@ interface AppState {
   notifications: number;
   setNotifications: (n: number) => void;
 
-  // Karma score
+  // Karma score & Gamification
   karmaScore: number;
   addKarma: (points: number) => void;
+  redeemedRewards: string[];
+  redeemReward: (cost: number, rewardId: string) => boolean;
+
+  // Global Contextual Form State
+  activeForm: ActiveForm | null;
+  setActiveForm: (form: ActiveForm | null) => void;
+  formData: Record<string, string>;
+  setFormData: (data: Record<string, string>) => void;
+
+  // Intelligence: Collective Action clusters
+  collectiveClusters: CollectiveCluster[];
+  addCluster: (cluster: CollectiveCluster) => void;
+  joinCluster: (clusterId: string) => void;
+}
+
+export function getUserLevelDescriptor(karma: number) {
+  if (karma >= 150) return { title: 'Community Head', color: 'text-amber-500 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/20', icon: 'stars' };
+  if (karma >= 51) return { title: 'Contributor', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-500/20', icon: 'military_tech' };
+  return { title: 'Citizen', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-500/20', icon: 'person' };
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  isAuthenticated: false,
+  userType: 'citizen',
+  role: 'citizen',
+  login: (name, userType) => set((state) => ({
+    isAuthenticated: true,
+    userType,
+    role: getRoleFromKarma(state.karmaScore, userType),
+    userProfile: { ...state.userProfile, name },
+    onboardingComplete: userType === 'government' ? true : state.onboardingComplete,
+  })),
+  logout: () => set({ isAuthenticated: false, userType: 'citizen', role: 'citizen', onboardingComplete: false }),
+
   onboardingComplete: false,
   completeOnboarding: () => set({ onboardingComplete: true }),
 
@@ -149,6 +199,7 @@ export const useAppStore = create<AppState>((set) => ({
     yojana_saathi: [],
     arthik_salahkar: [],
     vidhi_sahayak: [],
+    kisan_mitra: [],
   },
   addMessage: (agentKey, message) =>
     set((state) => ({
@@ -215,9 +266,40 @@ export const useAppStore = create<AppState>((set) => ({
   trackBadge: 3, // matches 3 seeded demo trackedItems
   clearTrackBadge: () => set({ trackBadge: 0 }),
 
-  notifications: 0,
+  notifications: 3, // Initial mock count
   setNotifications: (n) => set({ notifications: n }),
 
-  karmaScore: 395, // 245 base + 3 demo items × 50 karma each
-  addKarma: (points) => set((state) => ({ karmaScore: state.karmaScore + points })),
+  karmaScore: 1250,
+  addKarma: (points) => set((state) => {
+    const newKarma = state.karmaScore + points;
+    return { karmaScore: newKarma, role: getRoleFromKarma(newKarma, state.userType) };
+  }),
+  
+  redeemedRewards: [],
+  redeemReward: (cost, rewardId) => {
+    let success = false;
+    set((state) => {
+      if (state.karmaScore >= cost && !state.redeemedRewards.includes(rewardId)) {
+        success = true;
+        return { 
+          karmaScore: state.karmaScore - cost, 
+          redeemedRewards: [...state.redeemedRewards, rewardId] 
+        };
+      }
+      return state;
+    });
+    return success;
+  },
+
+  activeForm: null,
+  setActiveForm: (form) => set({ activeForm: form }),
+  formData: {},
+  setFormData: (data) => set({ formData: data }),
+
+  collectiveClusters: [],
+  addCluster: (cluster) => set((state) => ({ collectiveClusters: [cluster, ...state.collectiveClusters] })),
+  joinCluster: (clusterId) => set((state) => ({
+    collectiveClusters: state.collectiveClusters.map(c => c.clusterId === clusterId ? { ...c, participantCount: c.participantCount + 1 } : c),
+    karmaScore: state.karmaScore + 5, // karma for collective action
+  })),
 }));

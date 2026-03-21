@@ -73,7 +73,7 @@
         <p id="current-date" class="text-slate-500 dark:text-gray-400 text-sm font-medium mb-1">Thursday, 24 Oct</p>
         <h1 id="user-greeting" class="text-[32px] font-bold leading-tight text-slate-900 dark:text-white">Namaste,
           नागरिक!</h1>
-        <p class="text-slate-600 dark:text-gray-300 text-lg mt-1">How can we help today?</p>
+        <p data-i18n="helpToday" class="text-slate-600 dark:text-gray-300 text-lg mt-1">How can we help today?</p>
       </div>
       <!-- Voice Action Area -->
       <div class="px-5 py-6">
@@ -85,8 +85,8 @@
               <span class="material-symbols-outlined text-white text-4xl">mic</span>
             </div>
             <div class="text-center">
-              <span class="block text-white text-xl font-bold">Tap to Speak / बोलें</span>
-              <span class="block text-white/80 text-sm font-medium mt-1">All 22 official languages supported</span>
+              <span data-i18n="tapToSpeak" class="block text-white text-xl font-bold">Tap to Speak / बोलें</span>
+              <span data-i18n="allLangsSupported" class="block text-white/80 text-sm font-medium mt-1">All 22 official languages supported</span>
             </div>
           </div>
         </button>
@@ -94,8 +94,8 @@
       <!-- Council of Five Agents -->
       <div class="px-5 pb-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold text-slate-900 dark:text-white">Council of Five Agents</h2>
-          <a class="text-primary text-sm font-semibold hover:underline" href="#">View All</a>
+          <h2 data-i18n="councilTitle" class="text-lg font-bold text-slate-900 dark:text-white">Council of Five Agents</h2>
+          <a data-i18n="viewAll" class="text-primary text-sm font-semibold hover:underline" href="#">View All</a>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <!-- Agent 1: Civic -->
@@ -106,8 +106,8 @@
               <span class="material-symbols-outlined">diversity_3</span>
             </div>
             <div>
-              <h3 class="font-bold text-slate-900 dark:text-white text-sm">Nagarik Mitra</h3>
-              <p class="text-xs text-slate-500 dark:text-gray-400">Civic Services</p>
+              <h3 data-i18n="agentNM" class="font-bold text-slate-900 dark:text-white text-sm">Nagarik Mitra</h3>
+              <p data-i18n="agentNMSub" class="text-xs text-slate-500 dark:text-gray-400">Civic Services</p>
             </div>
           </div>
           <!-- Agent 2: Health -->
@@ -118,8 +118,8 @@
               <span class="material-symbols-outlined">medical_services</span>
             </div>
             <div>
-              <h3 class="font-bold text-slate-900 dark:text-white text-sm">Swasthya Sahayak</h3>
-              <p class="text-xs text-slate-500 dark:text-gray-400">Health &amp; Care</p>
+              <h3 data-i18n="agentSS" class="font-bold text-slate-900 dark:text-white text-sm">Swasthya Sahayak</h3>
+              <p data-i18n="agentSSSub" class="text-xs text-slate-500 dark:text-gray-400">Health &amp; Care</p>
             </div>
           </div>
           <!-- Agent 3: Welfare -->
@@ -130,8 +130,8 @@
               <span class="material-symbols-outlined">handshake</span>
             </div>
             <div>
-              <h3 class="font-bold text-slate-900 dark:text-white text-sm">Yojana Saathi</h3>
-              <p class="text-xs text-slate-500 dark:text-gray-400">Welfare Schemes</p>
+              <h3 data-i18n="agentYS" class="font-bold text-slate-900 dark:text-white text-sm">Yojana Saathi</h3>
+              <p data-i18n="agentYSSub" class="text-xs text-slate-500 dark:text-gray-400">Welfare Schemes</p>
             </div>
           </div>
           <!-- Agent 4: Finance -->
@@ -142,8 +142,8 @@
               <span class="material-symbols-outlined">currency_rupee</span>
             </div>
             <div>
-              <h3 class="font-bold text-slate-900 dark:text-white text-sm">Arthik Salahkar</h3>
-              <p class="text-xs text-slate-500 dark:text-gray-400">Finance &amp; Loans</p>
+              <h3 data-i18n="agentAS" class="font-bold text-slate-900 dark:text-white text-sm">Arthik Salahkar</h3>
+              <p data-i18n="agentASSub" class="text-xs text-slate-500 dark:text-gray-400">Finance &amp; Loans</p>
             </div>
           </div>
           <!-- Agent 5: Legal (Full Width) -->
@@ -154,8 +154,8 @@
               <span class="material-symbols-outlined">gavel</span>
             </div>
             <div class="flex-1">
-              <h3 class="font-bold text-slate-900 dark:text-white text-sm">Vidhi Sahayak</h3>
-              <p class="text-xs text-slate-500 dark:text-gray-400">Legal Aid &amp; Rights</p>
+              <h3 data-i18n="agentVS" class="font-bold text-slate-900 dark:text-white text-sm">Vidhi Sahayak</h3>
+              <p data-i18n="agentVSSub" class="text-xs text-slate-500 dark:text-gray-400">Legal Aid &amp; Rights</p>
             </div>
             <span class="material-symbols-outlined text-slate-400">chevron_right</span>
           </div>
@@ -180,10 +180,10 @@
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="material-symbols-outlined text-green-400 text-lg">satellite_alt</span>
-                <span class="text-xs font-bold uppercase tracking-wider text-green-400">ISRO DIGIPIN Active</span>
+                <span data-i18n="isroActive" class="text-xs font-bold uppercase tracking-wider text-green-400">ISRO DIGIPIN Active</span>
               </div>
               <div id="digipin-display" class="font-mono text-xl font-bold tracking-widest text-white">88-H2K-99L1</div>
-              <p class="text-[10px] text-slate-300 mt-1">Precision: 4x4m Grid • Tap to Know Your DIGIPIN 📮</p>
+              <p data-i18n="digipinPrecision" class="text-[10px] text-slate-300 mt-1">Precision: 4x4m Grid • Tap to Know Your DIGIPIN 📮</p>
             </div>
             <span class="material-symbols-outlined text-slate-400">chevron_right</span>
           </div>
@@ -198,14 +198,14 @@
           <div class="text-primary flex h-7 items-center justify-center">
             <span class="material-symbols-outlined fill-current" style="font-variation-settings: 'FILL' 1;">home</span>
           </div>
-          <p class="text-primary text-[10px] font-bold">Home</p>
+          <p data-i18n="navHome" class="text-primary text-[10px] font-bold">Home</p>
         </a>
         <a class="flex flex-1 flex-col items-center justify-end gap-1" href="#">
           <div
             class="text-slate-400 dark:text-slate-500 flex h-7 items-center justify-center hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <span class="material-symbols-outlined">article</span>
           </div>
-          <p class="text-slate-400 dark:text-slate-500 text-[10px] font-medium">Schemes</p>
+          <p data-i18n="navSchemes" class="text-slate-400 dark:text-slate-500 text-[10px] font-medium">Schemes</p>
         </a>
         <a class="flex flex-1 flex-col items-center justify-end gap-1 group" href="#">
           <!-- Floating Action Button effect for center item -->
@@ -214,21 +214,21 @@
             <span class="material-symbols-outlined text-white text-2xl">qr_code_scanner</span>
           </div>
           <div class="h-7 w-7"><!-- Spacer for the floating button --></div>
-          <p class="text-tertiary dark:text-blue-400 text-[10px] font-medium mt-1">Scan</p>
+          <p data-i18n="navScan" class="text-tertiary dark:text-blue-400 text-[10px] font-medium mt-1">Scan</p>
         </a>
         <a class="flex flex-1 flex-col items-center justify-end gap-1" href="#">
           <div
             class="text-slate-400 dark:text-slate-500 flex h-7 items-center justify-center hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <span class="material-symbols-outlined">folder_shared</span>
           </div>
-          <p class="text-slate-400 dark:text-slate-500 text-[10px] font-medium">Docs</p>
+          <p data-i18n="navDocs" class="text-slate-400 dark:text-slate-500 text-[10px] font-medium">Docs</p>
         </a>
         <a class="flex flex-1 flex-col items-center justify-end gap-1" href="#">
           <div
             class="text-slate-400 dark:text-slate-500 flex h-7 items-center justify-center hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
             <span class="material-symbols-outlined">account_circle</span>
           </div>
-          <p class="text-slate-400 dark:text-slate-500 text-[10px] font-medium">Profile</p>
+          <p data-i18n="navProfile" class="text-slate-400 dark:text-slate-500 text-[10px] font-medium">Profile</p>
         </a>
       </div>
     </div>
@@ -250,12 +250,24 @@
         var greetEl = document.getElementById('user-greeting');
         if (greetEl) {
           var name = (e.data.name || '').split(' ')[0] || 'नागरिक';
-          greetEl.textContent = 'Namaste, ' + name + '!';
+          greetEl.textContent = (e.data.greetingPrefix || 'Namaste') + ', ' + name + '!';
         }
         var dpEl = document.getElementById('digipin-display');
         if (dpEl && e.data.digipin) {
           dpEl.textContent = e.data.digipin;
         }
+      }
+      // Apply translations from parent
+      if (e.data.action === 'apply-translations' && e.data.translations) {
+        var tr = e.data.translations;
+        console.log('HOME.HTML RECEIVED TRANSLATIONS:', tr);
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+          var key = el.getAttribute('data-i18n');
+          if (key && tr[key]) {
+             console.log('Translating', key, 'to', tr[key]);
+             el.textContent = tr[key];
+          }
+        });
       }
     });
   </script>

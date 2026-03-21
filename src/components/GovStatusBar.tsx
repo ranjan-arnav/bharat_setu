@@ -51,6 +51,13 @@ const GOV_CHIPS: Record<AgentKey, GovChip[]> = {
     { icon: 'local_police', label: 'Zero FIR', sublabel: 'Any police station', color: '#F59E0B', status: 'none' },
     { icon: 'groups', label: 'Consumer', sublabel: 'File complaint', color: '#14B8A6', status: 'none', portal: 'consumerhelpline.gov.in' },
   ],
+  kisan_mitra: [
+    { icon: 'grass', label: 'PM-Kisan', sublabel: '₹2000 in 14d', badge: '⏰', color: '#84CC16', status: 'pending', portal: 'pmkisan.gov.in' },
+    { icon: 'credit_card', label: 'KCC', sublabel: 'Credit Limit', badge: '✓', color: '#8B5CF6', status: 'verified' },
+    { icon: 'storefront', label: 'e-NAM', sublabel: 'Mandi Prices', color: '#3B82F6', status: 'active', portal: 'enam.gov.in' },
+    { icon: 'water_drop', label: 'PMKSY', sublabel: 'Micro Irrigation', color: '#10B981', status: 'none', portal: 'pmksy.gov.in' },
+    { icon: 'science', label: 'Soil Health', sublabel: 'Card valid', badge: '✓', color: '#F59E0B', status: 'verified', portal: 'soilhealth.dac.gov.in' },
+  ],
 };
 
 const STATUS_DOT: Record<GovChip['status'], string> = {
@@ -61,8 +68,11 @@ const STATUS_DOT: Record<GovChip['status'], string> = {
   none: 'bg-transparent',
 };
 
+import { useTranslation } from '@/lib/i18n/useTranslation';
+
 export default function GovStatusBar({ agentKey }: { agentKey: AgentKey }) {
   const { userProfile } = useAppStore();
+  const { t } = useTranslation();
   const rawChips = GOV_CHIPS[agentKey] || [];
 
   // Overlay live profile data onto the static chip definitions
@@ -122,7 +132,7 @@ export default function GovStatusBar({ agentKey }: { agentKey: AgentKey }) {
 
             {/* Label */}
             <span className="text-[10px] text-slate-600 dark:text-gray-300 font-medium whitespace-nowrap">
-              {chip.label}
+              {t(chip.label, chip.label)}
             </span>
 
             {/* Badge */}
@@ -156,10 +166,15 @@ export default function GovStatusBar({ agentKey }: { agentKey: AgentKey }) {
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-slate-900 dark:text-white">{chip.label}</div>
-              {chip.sublabel && (
-                <div className="text-[10px] text-slate-500 dark:text-gray-400">{chip.sublabel}</div>
-              )}
+              <div className="text-xs font-bold text-slate-900 dark:text-white">
+                <span className="font-semibold">{t(chip.label, chip.label)}</span>
+                {(chip.sublabel || chip.status === 'pending') && (
+                  <span className="opacity-80 mx-1">•</span>
+                )}
+                {chip.sublabel && (
+                  <span className="opacity-90 max-w-[100px] truncate">{t(chip.sublabel, chip.sublabel)}</span>
+                )}
+              </div>
               {chip.portal && (
                 <div className="text-[9px] text-gray-500 mt-0.5">🔗 {chip.portal}</div>
               )}

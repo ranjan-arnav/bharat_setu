@@ -15,7 +15,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { azureConfig } from '@/lib/azure-config';
 
 interface DispatchRequest {
   eventId: string;

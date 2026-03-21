@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { azureConfig } from '@/lib/azure-config';
 
+type SafetyCategory = { severity?: number };
+type VisionTag = { name?: string };
+type VisionObject = { tags?: Array<{ name?: string }> };
+
 // Helper: Use Phi-4 to generate accurate ticket details based on Vision analysis
 async function generateTicketDetails(
   description: string,
@@ -100,8 +104,9 @@ Respond ONLY with valid JSON, no markdown.`;
     }
     
     throw new Error('Could not parse Phi response');
-  } catch (error: any) {
-    console.error('⚠️  Phi ticket generation failed, using rule-based fallback:', error.message || error.name);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('⚠️  Phi ticket generation failed, using rule-based fallback:', errorMessage);
     return {
       department: getDepartment(category),
       ward: `Ward ${Math.floor(Math.random() * 50) + 1}, Sector ${String.fromCharCode(65 + Math.floor(Math.random() * 5))}`,
@@ -125,7 +130,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Description is required' }, { status: 400 });
     }
 
-    let imageAnalysis = null;
+    let imageAnalysis: {
+      captionResult?: { text?: string };
+      tagsResult?: { values?: VisionTag[] };
+      objectsResult?: { values?: VisionObject[] };
+    } | null = null;
     
     // If image provided, analyze with Azure Vision
     if (image && azureConfig.vision.key) {
@@ -176,10 +185,10 @@ export async function POST(request: NextRequest) {
         if (safetyResponse.ok) {
           const safetyResult = await safetyResponse.json();
           // Check if any category severity is above 2
-          const categories = safetyResult.categoriesAnalysis || [];
-          isSafe = categories.every((c: any) => c.severity <= 2);
+          const categories = (safetyResult.categoriesAnalysis as SafetyCategory[] | undefined) || [];
+          isSafe = categories.every((category) => (category.severity ?? 0) <= 2);
         }
-      } catch (e) {
+      } catch (e: unknown) {
         console.log('Content safety check skipped:', e);
       }
     }
@@ -204,8 +213,8 @@ export async function POST(request: NextRequest) {
     // Prepare vision analysis
     const visionData = imageAnalysis ? {
       caption: imageAnalysis.captionResult?.text,
-      tags: imageAnalysis.tagsResult?.values?.map((t: any) => t.name),
-      objects: imageAnalysis.objectsResult?.values?.map((o: any) => o.tags?.[0]?.name),
+      tags: imageAnalysis.tagsResult?.values?.map((tag) => tag.name).filter((value): value is string => Boolean(value)),
+      objects: imageAnalysis.objectsResult?.values?.map((obj) => obj.tags?.[0]?.name).filter((value): value is string => Boolean(value)),
     } : image ? {
       // Demo fallback when image is provided but Azure Vision isn't configured
       caption: getDemoCaption(category),
@@ -243,8 +252,9 @@ export async function POST(request: NextRequest) {
       grievance,
       message: `Grievance ${grievanceId} registered successfully. You will receive updates via SMS and in-app notifications.`,
     });
-  } catch (error: any) {
-    console.error('❌ Grievance API error:', error.message || error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ Grievance API error:', errorMessage);
     // Demo fallback - still return success so user can file grievance
     const grievanceId = `GRV-DEMO-${Date.now().toString(36).toUpperCase()}`;
     console.log('⚠️  Using demo fallback mode for grievance:', grievanceId);

@@ -4,12 +4,16 @@ import { azureConfig } from '@/lib/azure-config';
 // POST /api/schemes - Search government schemes via Azure AI Search
 export async function POST(request: NextRequest) {
   try {
-    const { query, filters = {}, top = 10 } = await request.json();
+    const { query, filters = {}, top = 10 } = await request.json() as {
+      query: string;
+      filters?: Record<string, unknown>;
+      top?: number;
+    };
 
     // Use Azure AI Search to find matching schemes
     const searchUrl = `${azureConfig.search.endpoint}/indexes/${azureConfig.search.indexName}/docs/search?api-version=2024-07-01`;
 
-    const searchBody: any = {
+    const searchBody: Record<string, unknown> = {
       search: query,
       queryType: 'simple',  // free tier doesn't support semantic configs
       top,
@@ -57,7 +61,7 @@ export async function POST(request: NextRequest) {
       total: data['@odata.count'] || 0,
       source: 'azure-search',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Schemes API error:', error);
     // Return demo data on error
     return NextResponse.json({

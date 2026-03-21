@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { useAppStore, type TrackedItem } from '@/lib/store';
 import { SUNITA_FLOW } from '@/lib/demo-data';
 import { FlagStripe } from '@/components/ui/GoiElements';
 import { useTranslation } from '@/lib/i18n/useTranslation';
+import { findCollectiveCluster, type CollectiveCluster } from '@/lib/intelligence';
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   water: '💧', road: '🛣️', electricity: '⚡', sanitation: '🧹', streetlight: '🔦', other: '📋',
@@ -17,7 +19,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 type Step = 'form' | 'analyzing' | 'result';
 
-// Single source of truth for grievance analysis step labels
+// Note: ANALYSIS_STEPS labels will be translated inline when rendered
 const ANALYSIS_STEPS = [
   'Analyzing photo with Azure Vision AI...',
   'Extracting DIGIPIN location...',
@@ -28,7 +30,7 @@ const ANALYSIS_STEPS = [
 ];
 
 export default function GrievanceForm({ onClose }: { onClose: () => void }) {
-  const { userProfile, addGrievance, addKarma, addTrackedItem } = useAppStore();
+  const { userProfile, addGrievance, addTrackedItem } = useAppStore();
   const { t } = useTranslation();
 
   const categories = [
@@ -47,12 +49,14 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
   const [analysisResult, setAnalysisResult] = useState<typeof SUNITA_FLOW | null>(null);
   const [analysisStep, setAnalysisStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [collectiveMatch, setCollectiveMatch] = useState<CollectiveCluster | null>(null);
+  const [joinedCluster, setJoinedCluster] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image must be under 5 MB. Please choose a smaller photo.');
+        alert(t('errorImageSize', '⚠️ Image must be under 5 MB. Please choose a smaller photo.'));
         e.target.value = '';
         return;
       }
@@ -129,11 +133,15 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             eta: data.grievance.estimatedResolution || '48 hours',
           } as TrackedItem);
           setStep('result');
+          // Check for collective action cluster
+          const cluster = findCollectiveCluster(category || 'other', userProfile.digipin);
+          if (cluster) setCollectiveMatch(cluster);
           return;
         }
       }
     } catch (error) {
       console.error('API call failed:', error);
+      alert(t('errorApiConnection', '⚠️ Network issue. Using offline fallback mode.'));
       // Use demo fallback
     }
 
@@ -168,6 +176,9 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
       eta: '48 hours',
     } as TrackedItem);
     setStep('result');
+    // Check for collective action cluster (demo fallback path)
+    const cluster = findCollectiveCluster(category || 'other', userProfile.digipin);
+    if (cluster) setCollectiveMatch(cluster);
   };
 
   return (
@@ -180,11 +191,11 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
         </button>
         <div className="flex-1">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white">{t('grievanceTitle')}</h2>
-          <p className="text-[10px] text-slate-500 dark:text-gray-400">Photo + DIGIPIN → Auto-routed ticket</p>
+          <p className="text-[10px] text-slate-500 dark:text-gray-400">{t('Photo + DIGIPIN → Auto-routed ticket', 'Photo + DIGIPIN → Auto-routed ticket')}</p>
         </div>
         <div className="flex items-center gap-1 bg-blue-500/20 px-2 py-1 rounded-full">
           <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></span>
-          <span className="text-[9px] text-blue-400 font-bold">Nagarik Mitra</span>
+          <span className="text-[9px] text-blue-400 font-bold">{t('nagarikMitra', 'Nagarik Mitra')}</span>
         </div>
       </div>
 
@@ -194,11 +205,13 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             {/* Photo Upload */}
             <div>
               <label className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">
-                📸 Photo Evidence (Optional)
+                📸 {t('Photo Evidence (Optional)', 'Photo Evidence (Optional)')}
               </label>
               {imagePreview ? (
                 <div className="relative rounded-2xl overflow-hidden border border-black/10 dark:border-white/10">
-                  <img src={imagePreview} alt="Uploaded" className="w-full h-48 object-cover" />
+                  <div className="relative w-full h-48">
+                    <Image src={imagePreview} alt="Uploaded" fill unoptimized className="object-cover" sizes="(max-width: 430px) 100vw, 430px" />
+                  </div>
                   <button
                     onClick={() => { setImagePreview(null); setImageFile(null); }}
                     className="absolute top-2 right-2 bg-black/60 rounded-full p-1"
@@ -207,7 +220,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
                   </button>
                   <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1">
                     <span className="material-symbols-outlined text-blue-400 text-sm">photo_camera</span>
-                    <span className="text-[10px] text-blue-400 font-bold">Image Uploaded</span>
+                    <span className="text-[10px] text-blue-400 font-bold">{t('Image Uploaded', 'Image Uploaded')}</span>
                   </div>
                 </div>
               ) : (
@@ -216,8 +229,8 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
                   className="w-full h-36 border-2 border-dashed border-black/10 dark:border-white/15 rounded-2xl flex flex-col items-center justify-center gap-2 hover:bg-black/5 dark:bg-white/5 transition-all"
                 >
                   <span className="material-symbols-outlined text-3xl text-gray-500">add_a_photo</span>
-                  <span className="text-xs text-slate-500 dark:text-gray-400">Tap to add photo</span>
-                  <span className="text-[10px] text-gray-500">AI will auto-analyze the issue</span>
+                  <span className="text-xs text-slate-500 dark:text-gray-400">{t('Tap to add photo', 'Tap to add photo')}</span>
+                  <span className="text-[10px] text-gray-500">{t('AI will auto-analyze the issue', 'AI will auto-analyze the issue')}</span>
                 </button>
               )}
               <input
@@ -227,8 +240,8 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
                 capture="environment"
                 onChange={handleImageUpload}
                 className="hidden"
-                aria-label="Upload photo of issue"
-                title="Upload photo"
+                aria-label={t('uploadPhotoOfIssue', 'Upload photo of issue')}
+                title={t('uploadPhoto', 'Upload photo')}
               />
             </div>
 
@@ -238,7 +251,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
               <div className="flex-1">
                 <div className="text-[10px] text-green-400 font-bold uppercase">{t("isroDigipinLabel")}</div>
                 <div className="font-mono text-lg font-bold text-slate-900 dark:text-white tracking-wider">{userProfile.digipin}</div>
-                <div className="text-[9px] text-slate-500 dark:text-gray-400">4x4m precision • Auto-detected</div>
+                <div className="text-[9px] text-slate-500 dark:text-gray-400">{t('precision4mAutoDetected', '4x4m precision • Auto-detected')}</div>
               </div>
               <span className="material-symbols-outlined text-slate-500 dark:text-gray-400">my_location</span>
             </div>
@@ -246,7 +259,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             {/* Category */}
             <div>
               <label className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">
-                Category
+                {t('Category', 'Category')}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {categories.map((cat) => (
@@ -268,7 +281,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             {/* Description */}
             <div>
               <label className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2 block">
-                Description / विवरण
+                {t('Description / विवरण', 'Description / विवरण')}
               </label>
               <textarea
                 value={description}
@@ -293,7 +306,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             <div className="flex items-start gap-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
               <span className="material-symbols-outlined text-green-400 text-sm mt-0.5">shield</span>
               <p className="text-[10px] text-green-700 dark:text-green-400/80">
-                Azure Content Safety protects your data. PII is automatically masked before processing.
+                {t('Azure Content Safety protects your data. PII is automatically masked before processing.', 'Azure Content Safety protects your data. PII is automatically masked before processing.')}
               </p>
             </div>
           </div>
@@ -305,8 +318,8 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
               <span className="material-symbols-outlined text-slate-900 dark:text-white text-3xl">smart_toy</span>
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">AI Processing</h3>
-              <p className="text-sm text-slate-500 dark:text-gray-400">Nagarik Mitra is {t("analyzingGrievance")}</p>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">{t('AI Processing', 'AI Processing')}</h3>
+              <p className="text-sm text-slate-500 dark:text-gray-400">{t('nagarikMitra', 'Nagarik Mitra')} {t("analyzingGrievance")}</p>
             </div>
             <div className="w-full max-w-xs space-y-3">
               {ANALYSIS_STEPS.map((stepText, i) => (
@@ -319,7 +332,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
                     <span className="material-symbols-outlined text-gray-600 text-lg">radio_button_unchecked</span>
                   )}
                   <span className={`text-xs ${i <= analysisStep ? 'text-slate-900 dark:text-white' : 'text-gray-500'}`}>
-                    {stepText}
+                    {t(stepText, stepText)}
                   </span>
                 </div>
               ))}
@@ -332,7 +345,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             {/* Success Banner */}
             <div className="bg-gradient-to-r from-green-500/20 to-green-600/10 border border-green-500/30 rounded-2xl p-4 text-center">
               <span className="material-symbols-outlined text-green-400 text-4xl">task_alt</span>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-2">Grievance Registered!</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-2">{t('Grievance Registered!', 'Grievance Registered!')}</h3>
               <p className="font-mono text-xl font-bold text-green-400 mt-1">
                 {analysisResult.grievanceTicket.id}
               </p>
@@ -343,7 +356,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
               <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="material-symbols-outlined text-blue-400">visibility</span>
-                  <h4 className="text-xs font-bold text-blue-400 uppercase">Vision Analysis</h4>
+                  <h4 className="text-xs font-bold text-blue-400 uppercase">{t('Vision Analysis', 'Vision Analysis')}</h4>
                 </div>
                 <p className="text-sm text-slate-600 dark:text-gray-300 mb-2">{analysisResult.photoAnalysis.caption}</p>
                 <div className="flex flex-wrap gap-1.5 mb-2">
@@ -356,7 +369,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
                 <div className="flex items-center gap-1.5 pt-2 border-t border-black/5 dark:border-white/5">
                   <span className="material-symbols-outlined text-[10px] text-slate-400">info</span>
                   <span className="text-[9px] text-slate-400">
-                    Configure AZURE_VISION_KEY for real-time Azure Vision analysis
+                    {t('Configure AZURE_VISION_KEY for real-time Azure Vision analysis', 'Configure AZURE_VISION_KEY for real-time Azure Vision analysis')}
                   </span>
                 </div>
               </div>
@@ -365,18 +378,18 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             {/* Ticket Details */}
             <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase">Ticket Details</h4>
+                <h4 className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase">{t('Ticket Details', 'Ticket Details')}</h4>
                 <div className="flex items-center gap-1 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">
                   <span className="material-symbols-outlined text-purple-400 text-[10px]">psychology</span>
-                  <span className="text-[9px] text-purple-400 font-bold">Phi-4 Routed</span>
+                  <span className="text-[9px] text-purple-400 font-bold">{t('Phi-4 Routed', 'Phi-4 Routed')}</span>
                 </div>
               </div>
               {[
-                ['Department', analysisResult.grievanceTicket.department],
-                ['Ward', analysisResult.grievanceTicket.ward],
-                ['Priority', analysisResult.grievanceTicket.priority],
-                ['DIGIPIN', userProfile.digipin || analysisResult.grievanceTicket.digipin],
-                ['Est. Resolution', analysisResult.grievanceTicket.estimatedResolution],
+                [t('Department', 'Department'), analysisResult.grievanceTicket.department],
+                [t('Ward', 'Ward'), analysisResult.grievanceTicket.ward],
+                [t('Priority', 'Priority'), t(analysisResult.grievanceTicket.priority, analysisResult.grievanceTicket.priority)],
+                [t('DIGIPIN', 'DIGIPIN'), userProfile.digipin || analysisResult.grievanceTicket.digipin],
+                [t('Est. Resolution', 'Est. Resolution'), analysisResult.grievanceTicket.estimatedResolution],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between items-center border-b border-white/5 pb-2 last:border-0">
                   <span className="text-xs text-slate-500 dark:text-gray-400">{label}</span>
@@ -389,21 +402,56 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-amber-400">tips_and_updates</span>
-                <h4 className="text-xs font-bold text-amber-400 uppercase">AI Recommendations</h4>
+                <h4 className="text-xs font-bold text-amber-400 uppercase">{t('AI Recommendations', 'AI Recommendations')}</h4>
               </div>
               <p className="text-xs text-slate-600 dark:text-gray-300 leading-relaxed">
-                📊 Similar issues in your area resolved in 48 hours on average.<br />
-                🔔 SMS & WhatsApp updates will be sent automatically.<br />
-                ⚖️ If unresolved in 72 hours, Vidhi Sahayak can escalate legally.
+                📊 {t('Similar issues in your area resolved in 48 hours on average.', 'Similar issues in your area resolved in 48 hours on average.')}<br />
+                🔔 {t('SMS & WhatsApp updates will be sent automatically.', 'SMS & WhatsApp updates will be sent automatically.')}<br />
+                ⚖️ {t('If unresolved in 72 hours, Vidhi Sahayak can escalate legally.', 'If unresolved in 72 hours, Vidhi Sahayak can escalate legally.')}
               </p>
             </div>
+
+            {/* Collective Action Card */}
+            {collectiveMatch && (
+              <div className={`border rounded-2xl p-4 transition-all ${joinedCluster ? 'bg-[#138808]/10 border-[#138808]/30' : 'bg-[#8B5CF6]/5 border-[#8B5CF6]/20'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="material-symbols-outlined text-[#8B5CF6]">group_work</span>
+                  <h4 className="text-xs font-bold text-[#8B5CF6] uppercase">{t('Collective Action', 'Collective Action')}</h4>
+                </div>
+                {joinedCluster ? (
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#138808] text-xl">check_circle</span>
+                    <div>
+                      <p className="text-sm font-bold text-[#138808]">{t('Joined!', 'Joined!')}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-gray-400">{t('Your voice amplifies the collective complaint.', 'Your voice amplifies the collective complaint.')} ID: {collectiveMatch.clusterId}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-600 dark:text-gray-300 leading-relaxed mb-3">
+                      👥 <strong>{collectiveMatch.participantCount} {t('people reported similar')}</strong> {t('reported similar')} <strong>{t(collectiveMatch.category, collectiveMatch.category)}</strong> {t('issues in your area (Zone', 'issues in your area (Zone')} {collectiveMatch.location}).
+                    </p>
+                    <button
+                      onClick={() => {
+                        setJoinedCluster(true);
+                        useAppStore.getState().addCluster(collectiveMatch);
+                        useAppStore.getState().addKarma(5);
+                      }}
+                      className="w-full py-2 rounded-xl text-xs font-bold bg-[#8B5CF6] text-white hover:bg-[#7C3AED] transition-all active:scale-[0.98]"
+                    >
+                      🤝 {t('Join Collective Complaint', 'Join Collective Complaint')}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Karma Points */}
             <div className="bg-gradient-to-r from-[#FF9933]/15 to-[#138808]/15 border border-[#FF9933]/20 rounded-2xl p-4 flex items-center gap-3">
               <span className="material-symbols-outlined text-[#FF9933] text-2xl">military_tech</span>
               <div>
-                <p className="text-sm font-bold text-slate-900 dark:text-white">+50 Civic Karma Points!</p>
-                <p className="text-[10px] text-slate-500 dark:text-gray-400">Thanks for reporting. You help improve governance.</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">+50 {t('Civic Karma Points!', 'Civic Karma Points!')}</p>
+                <p className="text-[10px] text-slate-500 dark:text-gray-400">{t('Thanks for reporting. You help improve governance.', 'Thanks for reporting. You help improve governance.')}</p>
               </div>
             </div>
 
@@ -412,7 +460,7 @@ export default function GrievanceForm({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="w-full bg-black/10 dark:bg-white/10 border border-black/10 dark:border-white/10 text-slate-900 dark:text-white font-bold py-3 rounded-2xl hover:bg-white/15 transition-all"
             >
-              Done
+              {t('Done', 'Done')}
             </button>
           </div>
         )}

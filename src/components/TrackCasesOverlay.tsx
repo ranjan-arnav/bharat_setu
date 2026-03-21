@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { useAppStore, type TrackedItem, type AgentKey } from '@/lib/store';
+import { hasPermission } from '@/lib/permissions';
 import { FlagStripe } from '@/components/ui/GoiElements';
 import { useTranslation } from '@/lib/i18n/useTranslation';
+import { calculateTrustScore } from '@/lib/intelligence';
 
 const STATUS_META: Record<TrackedItem['status'], { label: string; color: string; bg: string; border: string; dot: string }> = {
   'Active':       { label: 'Active',        color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/25',   dot: 'bg-blue-400' },
@@ -27,14 +29,15 @@ const AGENT_NAMES: Record<AgentKey, string> = {
   yojana_saathi:    'Yojana Saathi',
   arthik_salahkar:  'Arthik Salahkar',
   vidhi_sahayak:    'Vidhi Sahayak',
+  kisan_mitra:      'Kisan Mitra',
 };
 
-function timeAgo(ts: number): string {
+function timeAgo(ts: number, t: (key: string, fallback?: string) => string): string {
   const diff = Date.now() - ts;
-  if (diff < 60000) return 'Just now';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  return `${Math.floor(diff / 86400000)}d ago`;
+  if (diff < 60000) return t('Just now');
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}${t('m ago')}`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}${t('h ago')}`;
+  return `${Math.floor(diff / 86400000)}${t('d ago')}`;
 }
 
 interface Props {
@@ -44,7 +47,8 @@ interface Props {
 }
 
 export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgent }: Props) {
-  const { trackedItems, updateTrackedStatus, setActiveAgent } = useAppStore();
+  const { trackedItems, updateTrackedStatus, setActiveAgent, role } = useAppStore();
+  const canUpdateStatus = hasPermission(role, 'update_status');
   const { t } = useTranslation();
   const [filter, setFilter] = useState<TrackedItem['type'] | 'all'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -77,7 +81,7 @@ export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgen
           <div className="flex-1">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <span className="material-symbols-outlined text-[#FF9933] text-base">assignment</span>
-              My Cases &amp; Tracking
+              {t('myCasesTracking')}
             </h2>
             <div className="text-[10px] text-slate-500 dark:text-gray-400">{activeCount} {t('activeCases')} · {resolvedCount} {t('resolvedCases')}</div>
           </div>
@@ -185,9 +189,9 @@ export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgen
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${sm.color} ${sm.bg} ${sm.border} flex items-center gap-1`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${sm.dot}`}></span>
-                        {sm.label}
+                        {t(sm.label, sm.label)}
                       </span>
-                      <span className="text-[9px] text-gray-500">{timeAgo(item.createdAt)}</span>
+                      <span className="text-[9px] text-gray-500">{timeAgo(item.createdAt, t)}</span>
                     </div>
                     <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">{item.title}</p>
                     <p className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 leading-snug">{item.description}</p>
@@ -205,35 +209,55 @@ export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgen
                     <div className="grid grid-cols-2 gap-2">
                       {item.refId && (
                         <div className="bg-black/5 dark:bg-white/5 rounded-xl p-2">
-                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">Ref ID</div>
+                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">{t('Ref ID')}</div>
                           <div className="text-[11px] font-mono font-bold text-slate-900 dark:text-white mt-0.5">{item.refId}</div>
                         </div>
                       )}
                       {item.amount && (
                         <div className="bg-black/5 dark:bg-white/5 rounded-xl p-2">
-                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">Amount</div>
+                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">{t('Amount')}</div>
                           <div className="text-[11px] font-bold text-green-400 mt-0.5">{item.amount}</div>
                         </div>
                       )}
                       {item.eta && (
                         <div className="bg-black/5 dark:bg-white/5 rounded-xl p-2">
-                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">ETA</div>
+                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">{t('ETA')}</div>
                           <div className="text-[11px] font-bold text-slate-900 dark:text-white mt-0.5">{item.eta}</div>
                         </div>
                       )}
                       {item.neighbourhood && (
                         <div className="bg-black/5 dark:bg-white/5 rounded-xl p-2">
-                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">Neighbours</div>
-                          <div className="text-[11px] font-bold text-amber-400 mt-0.5">+{item.neighbourhood} same issue</div>
+                          <div className="text-[9px] text-gray-500 uppercase tracking-wide">{t('Neighbours')}</div>
+                          <div className="text-[11px] font-bold text-amber-400 mt-0.5">+{item.neighbourhood} {t('same issue')}</div>
                         </div>
                       )}
                     </div>
+
+                    {/* Trust Score Badge */}
+                    {(() => {
+                      const deptMap: Record<string, string> = { grievance: 'Municipal', scheme: 'Revenue', health: 'Health', legal: 'Police', finance: 'Revenue' };
+                      const dept = deptMap[item.type] || 'Municipal';
+                      const ts = calculateTrustScore(dept);
+                      return (
+                        <div className="flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5">
+                          <span className="material-symbols-outlined text-sm" style={{ color: ts.color }}>verified</span>
+                          <div className="flex-1">
+                            <span className="text-[10px] font-bold text-slate-900 dark:text-white">{t(dept, dept)} {t('Dept Trust Score: ')}</span>
+                            <span className="text-[11px] font-black" style={{ color: ts.color }}>{ts.score}/10</span>
+                            <span className="text-[8px] font-bold ml-1 px-1 py-0.5 rounded" style={{ color: ts.color, backgroundColor: ts.color + '15' }}>{t(ts.label, ts.label)}</span>
+                          </div>
+                          <span className={`material-symbols-outlined text-xs ${ts.trend === 'up' ? 'text-green-500' : ts.trend === 'down' ? 'text-red-500' : 'text-slate-400'}`}>
+                            {ts.trend === 'up' ? 'trending_up' : ts.trend === 'down' ? 'trending_down' : 'trending_flat'}
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Agent tag + portal */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 bg-black/5 dark:bg-white/5 rounded-full px-2 py-1">
                         <span className="material-symbols-outlined text-[10px] text-slate-500 dark:text-gray-400">smart_toy</span>
-                        <span className="text-[10px] text-slate-500 dark:text-gray-400">{AGENT_NAMES[item.agentKey]}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-gray-400">{t(AGENT_NAMES[item.agentKey], AGENT_NAMES[item.agentKey])}</span>
                       </div>
                       {item.portal && (
                         <div className="flex items-center gap-1 text-[10px] text-blue-400">
@@ -250,20 +274,39 @@ export default function TrackCasesOverlay({ onClose, onOpenGrievance, onOpenAgen
                           onClick={() => updateTrackedStatus(item.id, 'Resolved')}
                           className="flex-1 py-2 rounded-xl text-xs font-bold bg-green-500/15 text-green-400 border border-green-500/25 hover:bg-green-500/25 transition-all active:scale-95"
                         >
-                          ✓ Mark Resolved
+                          {t('✓ Mark Resolved')}
                         </button>
                       )}
                       <button
                         onClick={() => {
-                          console.log('Opening agent chat for:', item.agentKey);
                           setActiveAgent(item.agentKey);
                           onOpenAgent(item.agentKey);
                         }}
                         className="flex-1 py-2 rounded-xl text-xs font-bold bg-[#FF9933]/15 text-[#FF9933] border border-[#FF9933]/25 hover:bg-[#FF9933]/25 transition-all active:scale-95"
                       >
-                        💬 Ask Agent
+                        {t('💬 Ask Agent')}
                       </button>
                     </div>
+
+                    {/* Government-only: Status Update Dropdown */}
+                    {canUpdateStatus && item.status !== 'Resolved' && (
+                      <div className="mt-2 p-2.5 rounded-xl bg-[#138808]/10 border border-[#138808]/20">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="material-symbols-outlined text-[12px] text-[#138808]">admin_panel_settings</span>
+                          <span className="text-[9px] font-bold text-[#138808] uppercase tracking-wider">{t('Government Action')}</span>
+                        </div>
+                        <select
+                          value={item.status}
+                          onChange={(e) => updateTrackedStatus(item.id, e.target.value as TrackedItem['status'])}
+                          className="w-full bg-white dark:bg-black/30 border border-[#138808]/30 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#138808]"
+                        >
+                          <option value="Pending">{t('Pending')}</option>
+                          <option value="Under Review">{t('Under Review')}</option>
+                          <option value="In Progress">{t('In Progress')}</option>
+                          <option value="Resolved">{t('Resolved')}</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

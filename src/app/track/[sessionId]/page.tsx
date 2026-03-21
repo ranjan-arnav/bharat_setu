@@ -54,7 +54,7 @@ export default function TrackingPage({ params }: { params: { sessionId: string }
             </div>
 
             <div className="mt-8 text-sm text-slate-500 max-w-lg">
-                This is a live tracking link dispatched to emergency responders and personal contacts. The victim's device is continuously pushing coordinates via background tasks.
+                This is a live tracking link dispatched to emergency responders and personal contacts. The victim&apos;s device is continuously pushing coordinates via background tasks.
             </div>
         </div>
     );

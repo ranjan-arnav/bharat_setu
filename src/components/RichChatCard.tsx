@@ -180,7 +180,7 @@ export function parseCards(content: string, agentKey: AgentKey, profile?: UserPr
 }
 
 // ─── Card Component ────────────────────────────────────────────────────────────
-function InlineCard({ card, agentKey, onTrack }: { card: ParsedCard; agentKey: AgentKey; onTrack?: (card: ParsedCard) => void }) {
+function InlineCard({ card, onTrack }: { card: ParsedCard; onTrack?: (card: ParsedCard) => void }) {
   const BG: Record<ParsedCard['type'], string> = {
     grievance: 'from-blue-500/10   to-blue-500/5   border-blue-500/20',
     scheme: 'from-green-500/10  to-green-500/5  border-green-500/20',
@@ -435,7 +435,7 @@ export default function RichChatCard({ content, agentKey, onAction }: RichChatCa
         {renderMarkdown(content.replace(/\n?~~TRACK_TAB~~/gi, ''))}
       </div>
       {cards.map((card, i) => (
-        <InlineCard key={i} card={card} agentKey={agentKey} onTrack={handleCardAction} />
+        <InlineCard key={i} card={card} onTrack={handleCardAction} />
       ))}
     </div>
   );

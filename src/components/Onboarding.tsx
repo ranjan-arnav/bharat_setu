@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useAppStore, type CitizenProfile } from '@/lib/store';
+import { useAppStore, type CitizenProfile, type UserType } from '@/lib/store';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTranslation } from '@/lib/i18n/useTranslation';
 
@@ -199,7 +199,6 @@ type Step =
 
 // ─── Ashoka Chakra SVG ────────────────────────────────────────────────────────
 function AshokaChakra({ size = 80, spin = false, className = '' }: { size?: number; spin?: boolean; className?: string }) {
-  const { t } = useTranslation();
   const spokes = Array.from({ length: 24 }, (_, i) => {
     const angle = (i * 360) / 24;
     const rad = (angle * Math.PI) / 180;
@@ -251,13 +250,14 @@ function VerifiedBadge({ text }: { text: string }) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 export default function Onboarding() {
-  const { t } = useTranslation();
-  const { completeOnboarding, setUserProfile, setCitizenProfile } = useAppStore();
+  const { t, lang } = useTranslation();
+  const { completeOnboarding, setUserProfile, setCitizenProfile, login } = useAppStore();
 
   const [step, setStep] = useState<Step>('splash');
   const [selectedLang, setSelectedLang] = useState('hi');
+  const [loginType, setLoginType] = useState<UserType>('citizen');
   const [aadhaar, setAadhaar] = useState('');
-  const [mobileInput, setMobileInput] = useState('');
+  const [mobileInput] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpTimer, setOtpTimer] = useState(30);
   const [fetchStage, setFetchStage] = useState(0);
@@ -276,8 +276,8 @@ export default function Onboarding() {
   // ── Auto-advance splash ─────────────────────────────────────────────────────
   useEffect(() => {
     if (step !== 'splash') return;
-    const t = setTimeout(() => setStep('language'), 2800);
-    return () => clearTimeout(t);
+    const timeoutId = setTimeout(() => setStep('language'), 2800);
+    return () => clearTimeout(timeoutId);
   }, [step]);
 
   // ── OTP countdown ──────────────────────────────────────────────────────────
@@ -376,8 +376,46 @@ export default function Onboarding() {
     setDemoMode(true);
     setDemoEmoji(emoji);
     setProfile(personaProfile);
-    // Removed setSelectedLang overwrite, preserving user's choice from step 1
+    login(personaProfile.name, loginType);
     setStep('fetching');
+  };
+
+  const handleGovLogin = () => {
+    const govProfile: CitizenProfile = {
+      name: 'District Magistrate',
+      nameHindi: 'जिलाधिकारी',
+      aadhaarMasked: '',
+      dob: '',
+      gender: '',
+      mobile: '',
+      address: 'District Office',
+      district: 'Lucknow',
+      state: 'Uttar Pradesh',
+      pincode: '226001',
+      digipin: '',
+      language: selectedLang,
+      occupation: 'Government Officer',
+      income: 0,
+      bplCard: false,
+      rationCardType: '',
+      linkedSchemes: [],
+      eligibleSchemes: [],
+      aadhaarVerified: true,
+      emergencyContacts: [],
+    };
+    // IMPORTANT: Set citizenProfile & userProfile BEFORE login(),
+    // because login() sets onboardingComplete=true for govt, which unmounts Onboarding.
+    setCitizenProfile(govProfile);
+    setUserProfile({
+      name: govProfile.name,
+      digipin: govProfile.digipin,
+      language: selectedLang,
+      state: govProfile.state,
+      occupation: govProfile.occupation,
+      income: govProfile.income,
+    });
+    login('District Magistrate', 'government');
+    completeOnboarding();
   };
 
   const finishOnboarding = () => {
@@ -483,7 +521,10 @@ export default function Onboarding() {
             {LANGUAGES.map((lang) => (
               <button
                 key={lang.code}
-                onClick={() => setSelectedLang(lang.code)}
+                onClick={() => {
+                  setSelectedLang(lang.code);
+                  setUserProfile({ language: lang.code });
+                }}
                 className={`relative py-4 px-4 rounded-2xl border-2 transition-all text-left ${selectedLang === lang.code
                   ? 'border-[#FF9933] bg-[#FF9933]/10'
                   : 'border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:border-black/20 dark:border-white/20'
@@ -529,116 +570,115 @@ export default function Onboarding() {
         <FlagStripe />
         <div className="absolute top-4 right-4 z-[300]"><ThemeToggle /></div>
         <div className="flex-1 flex flex-col px-5 pt-8 pb-6 overflow-y-auto">
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="inline-flex items-center gap-2 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-full px-3 py-1 mb-4">
               <span className="text-[10px] text-slate-500 dark:text-gray-400 tracking-wider uppercase">Step 2 of 3</span>
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">लॉगिन करें</h2>
-            <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">Choose how you want to sign in</p>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{t('whoAreYou', 'Who are you?')}</h2>
+            <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">{t('howDoYouWantToUse', 'How do you want to use Bharat Setu?')}</p>
           </div>
 
-          {/* Aadhaar option */}
-          <button
-            onClick={() => setStep('aadhaar')}
-            className="w-full bg-black/5 dark:bg-white/5 border-2 border-[#003580]/60 hover:border-[#003580] rounded-2xl p-4 flex items-center gap-4 transition-all active:scale-95 mb-3 group"
-          >
-            <div className="w-14 h-14 rounded-xl bg-[#003580]/20 border border-[#003580]/40 flex items-center justify-center flex-shrink-0">
-              <div className="text-center">
-                <AshokaChakra size={32} />
-              </div>
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-bold text-slate-900 dark:text-white text-sm">Aadhaar OTP Login</p>
-              <p className="text-[11px] text-slate-500 dark:text-gray-400">Verify with UIDAI registered mobile</p>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className="text-[9px] bg-[#003580]/30 text-blue-300 px-1.5 py-0.5 rounded font-medium">UIDAI</span>
-                <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-medium">✓ Secure</span>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-gray-500 group-hover:text-slate-900 dark:text-white transition-colors">chevron_right</span>
-          </button>
-
-          {/* Mobile option */}
-          <button
-            onClick={() => setStep('mobile')}
-            className="w-full bg-black/5 dark:bg-white/5 border-2 border-black/10 dark:border-white/10 hover:border-black/20 dark:border-white/20 rounded-2xl p-4 flex items-center gap-4 transition-all active:scale-95 mb-3 group"
-          >
-            <div className="w-14 h-14 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-green-400 text-2xl">phone_iphone</span>
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-bold text-slate-900 dark:text-white text-sm">Mobile Number + OTP</p>
-              <p className="text-[11px] text-slate-500 dark:text-gray-400">Login without Aadhaar</p>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-medium">✓ Secure</span>
-                <span className="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded font-medium">Limited Access</span>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-gray-500 group-hover:text-slate-900 dark:text-white transition-colors">chevron_right</span>
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
-            <span className="text-[11px] text-gray-500">or</span>
-            <div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
+          {/* Two big role buttons */}
+          <div className="flex gap-3 mb-6">
+            <button
+              onClick={() => setLoginType('citizen')}
+              className={`flex-1 py-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95 ${
+                loginType === 'citizen'
+                  ? 'border-[#FF9933] bg-[#FF9933]/10 shadow-lg shadow-orange-500/10'
+                  : 'border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5'
+              }`}
+            >
+              <span className="material-symbols-outlined text-3xl" style={{ color: loginType === 'citizen' ? '#FF9933' : undefined }}>person</span>
+              <span className={`text-sm font-bold ${
+                loginType === 'citizen' ? 'text-[#FF9933]' : 'text-slate-500 dark:text-gray-400'
+              }`}>{t('citizen', 'Citizen')}</span>
+              <span className="text-[10px] text-slate-500 dark:text-gray-400">{t('citizenSub', 'Citizen')}</span>
+            </button>
+            <button
+              onClick={() => setLoginType('government')}
+              className={`flex-1 py-5 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 active:scale-95 ${
+                loginType === 'government'
+                  ? 'border-[#138808] bg-[#138808]/10 shadow-lg shadow-green-600/10'
+                  : 'border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5'
+              }`}
+            >
+              <span className="material-symbols-outlined text-3xl" style={{ color: loginType === 'government' ? '#138808' : undefined }}>account_balance</span>
+              <span className={`text-sm font-bold ${
+                loginType === 'government' ? 'text-[#138808]' : 'text-slate-500 dark:text-gray-400'
+              }`}>{t('adminGov', 'Govt / Admin')}</span>
+              <span className="text-[10px] text-slate-500 dark:text-gray-400">{t('adminGovSub', 'Govt / Admin')}</span>
+            </button>
           </div>
 
-          {/* Demo mode — 3 personas */}
-          <div className="w-full">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
-              <span className="text-[10px] text-slate-500 dark:text-gray-400 font-semibold tracking-wider uppercase">Try a Demo Persona</span>
-              <div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
+          {/* Government quick-login */}
+          {loginType === 'government' && (
+            <div className="mb-6">
+              <button
+                onClick={handleGovLogin}
+                className="w-full bg-gradient-to-r from-[#138808] to-[#0d6b06] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-green-700/20"
+              >
+                <span className="material-symbols-outlined">login</span>
+                {t('loginGov', 'Login as Government Official')}
+              </button>
+              <p className="text-[9px] text-gray-500 text-center mt-2">{t('loginGovDesc', 'Access case management, status updates, and broadcast announcements')}</p>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {DEMO_PERSONAS.map((persona, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleDemoMode(persona.profile, persona.emoji)}
-                  className="w-full relative overflow-hidden bg-white/[0.04] border border-black/10 dark:border-white/10 hover:border-white/25 hover:bg-white/[0.07] rounded-2xl p-3.5 flex items-center gap-3.5 transition-all active:scale-[0.98] text-left"
-                >
-                  <div className="absolute top-0 right-0 bg-[#FF9933] text-slate-900 dark:text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg tracking-wider">DEMO</div>
-                  {/* Avatar */}
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl border"
-                    style={{ backgroundColor: `${persona.tagColor}15`, borderColor: `${persona.tagColor}35` }}
+          )}
+
+          {/* Citizen persona selection */}
+          {loginType === 'citizen' && (
+            <div className="w-full">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
+                <span className="text-[10px] text-slate-500 dark:text-gray-400 font-semibold tracking-wider uppercase">{t('selectDemoPersona', 'Select a Demo Persona')}</span>
+                <div className="flex-1 h-px bg-black/10 dark:bg-white/10" />
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {DEMO_PERSONAS.map((persona, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleDemoMode(persona.profile, persona.emoji)}
+                    className="w-full relative overflow-hidden bg-white/[0.04] border border-black/10 dark:border-white/10 hover:border-white/25 hover:bg-white/[0.07] rounded-2xl p-3.5 flex items-center gap-3.5 transition-all active:scale-[0.98] text-left"
                   >
-                    {persona.emoji}
-                  </div>
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-1.5 flex-wrap">
-                      <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight">{persona.profile.name}</p>
-                      <span className="text-[9px] text-slate-500 dark:text-gray-400">{persona.tagline}</span>
+                    <div className="absolute top-0 right-0 bg-[#FF9933] text-slate-900 dark:text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl-lg tracking-wider">{t('demo', 'DEMO')}</div>
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl border"
+                      style={{ backgroundColor: `${persona.tagColor}15`, borderColor: `${persona.tagColor}35` }}
+                    >
+                      {persona.emoji}
                     </div>
-                    <p className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
-                      <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>location_on</span>
-                      {persona.location}
-                    </p>
-                    <p className="text-[10px] text-slate-600 dark:text-gray-300 mt-1 leading-snug line-clamp-2">{persona.desc}</p>
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {persona.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-[8px] px-1.5 py-0.5 rounded font-semibold"
-                          style={{ backgroundColor: `${persona.tagColor}25`, color: persona.tagColor }}
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight">{persona.profile.name}</p>
+                        <span className="text-[9px] text-slate-500 dark:text-gray-400">{persona.tagline}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
+                        <span className="material-symbols-outlined" style={{ fontSize: '11px' }}>location_on</span>
+                        {persona.location}
+                      </p>
+                      <p className="text-[10px] text-slate-600 dark:text-gray-300 mt-1 leading-snug line-clamp-2">{persona.desc}</p>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {persona.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-[8px] px-1.5 py-0.5 rounded font-semibold"
+                            style={{ backgroundColor: `${persona.tagColor}25`, color: persona.tagColor }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <span className="material-symbols-outlined text-gray-500 flex-shrink-0" style={{ fontSize: '18px' }}>chevron_right</span>
-                </button>
-              ))}
+                    <span className="material-symbols-outlined text-gray-500 flex-shrink-0" style={{ fontSize: '18px' }}>chevron_right</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <p className="text-center text-[9px] text-gray-600 mt-4 leading-relaxed">
-            Bharat Setu uses DigiLocker & UIDAI for secure authentication.<br />
-            Data is encrypted and stored as per IT Act 2000.
+            {t('bharatSetuUsesDigilockerUidaiForSecureAuth', 'Bharat Setu uses DigiLocker & UIDAI for secure authentication.')}<br />
+            {t('dataEncryptedStoredAsPerItAct2000', 'Data is encrypted and stored as per IT Act 2000.')}
           </p>
         </div>
         <FlagStripe />
@@ -672,12 +712,12 @@ export default function Onboarding() {
         <div className="flex-1 flex flex-col px-5 pt-6 pb-4 overflow-y-auto">
           <button onClick={() => setStep('signin')} className="flex items-center gap-1 text-slate-500 dark:text-gray-400 text-sm mb-6 -ml-1">
             <span className="material-symbols-outlined text-lg">arrow_back</span>
-            Back
+            {t('back', 'Back')}
           </button>
 
           <div className="text-center mb-8">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Enter Aadhaar Number</h2>
-            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">12-digit Aadhaar as per UIDAI records</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('enterAadhaarNumber', 'Enter Aadhaar Number')}</h2>
+            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">{t('aadhaar12DigitAsPerUidai', '12-digit Aadhaar as per UIDAI records')}</p>
           </div>
 
           {/* Aadhaar card preview */}
@@ -721,11 +761,11 @@ export default function Onboarding() {
               value={aadhaar}
               onChange={(e) => handleAadhaarChange(e.target.value)}
               maxLength={14}
-              placeholder="Enter 12-digit Aadhaar"
+              placeholder={t('enter12DigitAadhaar', 'Enter 12-digit Aadhaar')}
               className="w-full bg-white/8 border-2 border-black/10 dark:border-white/15 focus:border-[#003580] rounded-xl px-4 py-3.5 text-slate-900 dark:text-white text-center text-lg font-mono tracking-[0.2em] placeholder:text-slate-400 dark:placeholder:text-gray-600 placeholder:text-sm placeholder:tracking-normal outline-none transition-colors"
             />
             <p className="text-[10px] text-gray-500 text-center mt-2">
-              Your Aadhaar number is encrypted end-to-end and never stored
+              {t('aadhaarEncryptedNeverStored', 'Your Aadhaar number is encrypted end-to-end and never stored')}
             </p>
           </div>
 
@@ -733,7 +773,7 @@ export default function Onboarding() {
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex gap-2.5 mb-4">
             <span className="material-symbols-outlined text-amber-400 text-base flex-shrink-0 mt-0.5">info</span>
             <p className="text-[11px] text-amber-200 leading-relaxed">
-              An OTP will be sent to your <b>UIDAI-registered mobile number</b>. Standard SMS charges may apply.
+              {t('otpWillBeSentToUidaiMobile', 'An OTP will be sent to your')} <b>{t('uidaiRegisteredMobileNumber', 'UIDAI-registered mobile number')}</b>. {t('standardSmsChargesMayApply', 'Standard SMS charges may apply.')}
             </p>
           </div>
 
@@ -743,8 +783,8 @@ export default function Onboarding() {
               <span className="material-symbols-outlined text-blue-400" style={{ fontSize: '14px' }}>folder_open</span>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-blue-300">DigiLocker Auto-Fetch Enabled</p>
-              <p className="text-[9px] text-gray-500">Documents, schemes &amp; profile will be auto-linked</p>
+              <p className="text-[10px] font-bold text-blue-300">{t('digilockerAutofetchEnabled', 'DigiLocker Auto-Fetch Enabled')}</p>
+              <p className="text-[9px] text-gray-500">{t('documentsSchemesProfileAutoLinked', 'Documents, schemes & profile will be auto-linked')}</p>
             </div>
             <div className="ml-auto">
               <span className="text-[9px] text-emerald-400 font-bold">✓ MeitY</span>
@@ -765,7 +805,7 @@ export default function Onboarding() {
             Send OTP via UIDAI
           </button>
           <button onClick={() => setStep('signin')} className="text-center text-xs text-gray-500 hover:text-slate-500 dark:text-gray-400">
-            Use Demo Mode instead
+            {t('useDemoModeInstead', 'Use Demo Mode instead')}
           </button>
         </div>
         <FlagStripe />
@@ -800,7 +840,7 @@ export default function Onboarding() {
         <div className="flex-1 flex flex-col px-5 pt-6 pb-4 overflow-y-auto">
           <button onClick={() => setStep(isMobileFlow ? 'mobile' : 'aadhaar')} className="flex items-center gap-1 text-slate-500 dark:text-gray-400 text-sm mb-6 -ml-1">
             <span className="material-symbols-outlined text-lg">arrow_back</span>
-            Back
+            {t('back', 'Back')}
           </button>
 
           <div className="text-center mb-6">
@@ -821,14 +861,14 @@ export default function Onboarding() {
                 <span className="text-sm">📱</span>
               </div>
               <div>
-                <p className="text-[11px] font-bold text-slate-900 dark:text-white">{isMobileFlow ? 'BHARAT' : 'UIDAI-OTP'}</p>
-                <p className="text-[9px] text-gray-500">Just now</p>
+                <p className="text-[11px] font-bold text-slate-900 dark:text-white">{isMobileFlow ? t('bharat', 'BHARAT') : t('uidaiOtp', 'UIDAI-OTP')}</p>
+                <p className="text-[9px] text-gray-500">{t('justNow', 'Just now')}</p>
               </div>
             </div>
             <p className="text-[11px] text-slate-600 dark:text-gray-300 leading-relaxed">
-              Your OTP for Bharat Setu verification is{' '}
+              {t('yourOtpForBharatSetuVerificationIs', 'Your OTP for Bharat Setu verification is')}{' '}
               <span className="text-[#FF9933] font-black tracking-widest">1 2 3 4 5 6</span>.{' '}
-              Valid for 10 minutes. DO NOT share with anyone.
+              {t('validForTenMinutesDoNotShare', 'Valid for 10 minutes. DO NOT share with anyone.')}
             </p>
           </div>
 
@@ -858,20 +898,20 @@ export default function Onboarding() {
           <div className="text-center mb-4">
             {otpTimer > 0 ? (
               <p className="text-xs text-gray-500">
-                Resend OTP in <span className="text-slate-900 dark:text-white font-bold">0:{String(otpTimer).padStart(2, '0')}</span>
+                {t('resendOtpIn', 'Resend OTP in')} <span className="text-slate-900 dark:text-white font-bold">0:{String(otpTimer).padStart(2, '0')}</span>
               </p>
             ) : (
               <button
                 onClick={() => { setOtpTimer(30); setOtp(['', '', '', '', '', '']); }}
                 className="text-xs text-[#FF9933] font-semibold"
               >
-                Resend OTP
+                {t('resendOtp', 'Resend OTP')}
               </button>
             )}
           </div>
 
           <p className="text-[10px] text-gray-600 text-center leading-relaxed">
-            For demo, use OTP: <span className="text-slate-500 dark:text-gray-400 font-mono font-bold">123456</span>
+            {t('forDemoUseOtp', 'For demo, use OTP:')} <span className="text-slate-500 dark:text-gray-400 font-mono font-bold">123456</span>
           </p>
         </div>
 
@@ -895,11 +935,11 @@ export default function Onboarding() {
   // ──────────────────────────────────────────────────────────────────────────
   if (step === 'fetching') {
     const stages = [
-      { icon: 'verified_user', label: 'Verifying Aadhaar with UIDAI...', source: 'UIDAI', color: 'text-blue-400' },
-      { icon: 'folder_open', label: 'Fetching DigiLocker documents...', source: 'DigiLocker · MeitY', color: 'text-indigo-400' },
-      { icon: 'account_balance', label: 'Checking Jan Samarth schemes...', source: 'Jan Samarth Portal', color: 'text-purple-400' },
-      { icon: 'grain', label: 'Syncing PM-KISAN beneficiary data...', source: 'Ministry of Agriculture', color: 'text-green-400' },
-      { icon: 'check_circle', label: 'Profile ready!', source: 'Bharat Setu', color: 'text-[#FF9933]' },
+      { icon: 'verified_user', label: t('fetchStageAadhaar', 'Verifying Aadhaar with UIDAI...'), source: 'UIDAI', color: 'text-blue-400' },
+      { icon: 'folder_open', label: t('fetchStageDigilocker', 'Fetching DigiLocker documents...'), source: 'DigiLocker · MeitY', color: 'text-indigo-400' },
+      { icon: 'account_balance', label: t('fetchStageJanSamarth', 'Checking Jan Samarth schemes...'), source: t('janSamarthPortal', 'Jan Samarth Portal'), color: 'text-purple-400' },
+      { icon: 'grain', label: t('fetchStagePMKisan', 'Syncing PM-KISAN beneficiary data...'), source: t('ministryOfAgriculture', 'Ministry of Agriculture'), color: 'text-green-400' },
+      { icon: 'check_circle', label: t('fetchStageReady', 'Profile ready!'), source: t('bharatSetu', 'Bharat Setu'), color: 'text-[#FF9933]' },
     ];
     return (
       <div className="fixed inset-0 z-[200] bg-slate-50 dark:bg-navy flex flex-col items-center justify-center max-w-[430px] mx-auto overflow-hidden px-6">
@@ -917,8 +957,8 @@ export default function Onboarding() {
           </div>
 
           <div className="text-center">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Setting up your profile</h2>
-            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">Connecting to Government of India portals</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('settingUpProfile', 'Setting up your profile')}</h2>
+            <p className="text-xs text-slate-500 dark:text-gray-400 mt-1">{t('connectingGovPortals', 'Connecting to Government of India portals')}</p>
           </div>
 
           {/* Stage indicators */}
@@ -973,13 +1013,13 @@ export default function Onboarding() {
         <div className="absolute top-4 right-4 z-[300]"><ThemeToggle /></div>
         <div className="flex-1 flex flex-col overflow-y-auto pb-4">
           {/* Header */}
-          <div className="bg-gradient-to-b from-[#001a3d]/80 dark:from-[#001a3d] to-transparent px-5 pt-5 pb-4">
+          <div className="bg-gradient-to-b from-[#003580]/10 to-transparent px-5 pt-5 pb-4">
             <div className="flex items-center gap-2 mb-1">
-              <VerifiedBadge text="UIDAI Verified" />
+              <VerifiedBadge text={t('uidaiVerified', 'UIDAI Verified')} />
               {demoMode && <span className="text-[10px] bg-[#FF9933]/20 text-[#FF9933] border border-[#FF9933]/30 px-2 py-0.5 rounded-full font-bold">DEMO MODE</span>}
             </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-2">{t("profileFetched")}</h2>
-            <p className="text-xs text-slate-500 dark:text-gray-400">Your information has been retrieved from Government portals</p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-2">{t('profileRetrievedTitle', 'Profile Retrieved!')}</h2>
+            <p className="text-xs text-slate-500 dark:text-gray-400">{t('profileRetrievedDesc', 'Your information has been retrieved from Government portals')}</p>
           </div>
 
           {/* Aadhaar card mockup */}
@@ -991,13 +1031,13 @@ export default function Onboarding() {
                   <div className="flex items-center gap-2">
                     <AshokaChakra size={28} />
                     <div>
-                      <p className="text-[10px] font-black text-white tracking-wider">GOVERNMENT OF INDIA</p>
-                      <p className="text-[8px] text-blue-300">भारत सरकार</p>
+                      <p className="text-[10px] font-black text-white tracking-wider">{t('govOfIndia', 'GOVERNMENT OF INDIA')}</p>
+                      <p className="text-[8px] text-blue-300">{t('bharatSarkar', 'भारत सरकार')}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-white">आधार · Aadhaar</p>
-                    <p className="text-[8px] text-blue-300">Unique ID Authority</p>
+                    <p className="text-[10px] font-bold text-white">{t('aadhaarTitle', 'आधार · Aadhaar')}</p>
+                    <p className="text-[8px] text-blue-300">{t('uniqueIdAuthority', 'Unique ID Authority')}</p>
                   </div>
                 </div>
 
@@ -1012,15 +1052,15 @@ export default function Onboarding() {
                     <p className="text-[11px] text-blue-200 mb-2">{profile.nameHindi}</p>
                     <div className="space-y-0.5">
                       <div className="flex gap-2">
-                        <span className="text-[9px] text-blue-300 w-14 flex-shrink-0">DOB:</span>
+                        <span className="text-[9px] text-blue-300 w-14 flex-shrink-0">{t('dobLabel', 'DOB:')}</span>
                         <span className="text-[10px] text-white font-medium">{profile.dob}</span>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-[9px] text-blue-300 w-14 flex-shrink-0">Gender:</span>
+                        <span className="text-[9px] text-blue-300 w-14 flex-shrink-0">{t('genderLabel', 'Gender:')}</span>
                         <span className="text-[10px] text-white font-medium">{profile.gender}</span>
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-[9px] text-blue-300 w-14 flex-shrink-0">Mobile:</span>
+                        <span className="text-[9px] text-blue-300 w-14 flex-shrink-0">{t('mobileLabel', 'Mobile:')}</span>
                         <span className="text-[10px] text-white font-medium">{profile.mobile}</span>
                       </div>
                     </div>
@@ -1035,7 +1075,7 @@ export default function Onboarding() {
 
                 {/* Address */}
                 <div className="mt-2.5 bg-white/5 rounded-lg px-3 py-2">
-                  <p className="text-[9px] text-blue-300 mb-0.5">Address · पता</p>
+                  <p className="text-[9px] text-blue-300 mb-0.5">{t('addressLabel', 'Address · पता')}</p>
                   <p className="text-[10px] text-white leading-relaxed">{profile.address}, {profile.district}, {profile.state} - {profile.pincode}</p>
                 </div>
               </div>
@@ -1051,30 +1091,30 @@ export default function Onboarding() {
           {/* Stats grid */}
           <div className="px-5 grid grid-cols-2 gap-3 mb-4">
             <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-3">
-              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">Ration Card</p>
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">{t('rationCardLabel', 'Ration Card')}</p>
               <p className="text-sm font-bold text-slate-900 dark:text-white">{profile.rationCardType}</p>
-              <VerifiedBadge text="Linked" />
+              <VerifiedBadge text={t('linkedBadge', 'Linked')} />
             </div>
             <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-3">
-              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">DIGIPIN</p>
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">{t('digipinLabel', 'DIGIPIN')}</p>
               <p className="text-sm font-bold text-slate-900 dark:text-white font-mono">{profile.digipin}</p>
-              <span className="text-[10px] text-purple-400 font-semibold">{t("isroMapped")}</span>
+              <span className="text-[10px] text-purple-400 font-semibold">{t("isroMapped", "ISRO Mapped")}</span>
             </div>
             <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-3">
-              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">Active Schemes</p>
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">{t('activeSchemes', 'Active Schemes')}</p>
               <p className="text-2xl font-black text-[#FF9933]">{profile.linkedSchemes.length}</p>
-              <p className="text-[9px] text-gray-500">Already receiving</p>
+              <p className="text-[9px] text-gray-500">{t('alreadyReceiving', 'Already receiving')}</p>
             </div>
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3">
-              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">New Eligible</p>
+              <p className="text-[10px] text-slate-500 dark:text-gray-400 mb-1">{t('newEligible', 'New Eligible')}</p>
               <p className="text-2xl font-black text-emerald-400">{profile.eligibleSchemes.length}</p>
-              <p className="text-[9px] text-emerald-500">Schemes found!</p>
+              <p className="text-[9px] text-emerald-500">{t('schemesFound', 'Schemes found!')}</p>
             </div>
           </div>
 
           {/* Linked schemes */}
           <div className="px-5 mb-4">
-            <p className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2">DigiLocker · Linked Benefits</p>
+            <p className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('digilockerLinked', 'DigiLocker · Linked Benefits')}</p>
             <div className="space-y-2">
               {profile.linkedSchemes.map((s, i) => (
                 <div key={i} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl p-3 flex items-center gap-3">
@@ -1082,7 +1122,7 @@ export default function Onboarding() {
                     <span className="material-symbols-outlined text-[#FF9933] text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
                   </div>
                   <p className="text-sm text-slate-900 dark:text-white font-semibold">{s}</p>
-                  <span className="ml-auto text-[10px] text-emerald-400 font-bold">Active ✓</span>
+                  <span className="ml-auto text-[10px] text-emerald-400 font-bold">{t('activeCheck', 'Active ✓')}</span>
                 </div>
               ))}
             </div>
@@ -1094,8 +1134,8 @@ export default function Onboarding() {
               <span className="material-symbols-outlined text-purple-400">hub</span>
             </div>
             <div className="flex-1">
-              <p className="text-[11px] font-bold text-slate-900 dark:text-white">Jan Samarth Portal Connected</p>
-              <p className="text-[9px] text-slate-500 dark:text-gray-400">Credit-linked scheme eligibility being assessed</p>
+              <p className="text-[11px] font-bold text-slate-900 dark:text-white">{t('janSamarthConnected', 'Jan Samarth Portal Connected')}</p>
+              <p className="text-[9px] text-slate-500 dark:text-gray-400">{t('janSamarthAssessing', 'Credit-linked scheme eligibility being assessed')}</p>
             </div>
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           </div>
@@ -1108,10 +1148,10 @@ export default function Onboarding() {
             className="w-full bg-gradient-to-r from-[#FF9933] to-[#e8811a] text-slate-900 dark:text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/20"
           >
             <span className="material-symbols-outlined">explore</span>
-            Explore {profile.eligibleSchemes.length} Eligible Schemes
+            {t('exploreEligibleSchemes', 'Explore %d Eligible Schemes').replace('%d', String(profile.eligibleSchemes.length))}
           </button>
           <button onClick={() => setStep('emergency-contact')} className="text-center text-xs text-gray-500 hover:text-slate-500 dark:text-gray-400 py-1">
-            Skip for now
+            {t('skipForNow', 'Skip for now')}
           </button>
         </div>
         <FlagStripe />
@@ -1136,7 +1176,7 @@ export default function Onboarding() {
                 id: `ec-${Date.now()}`,
                 name: ecName,
                 phone: ecPhone.replace(/\D/g, '').slice(-10),
-                relationship: ecRelation || 'Other',
+                relationship: ecRelation || t('otherRelation', 'Other'),
                 priority: (profile.emergencyContacts.length + 1) as 1 | 2,
               },
             ],
@@ -1157,8 +1197,12 @@ export default function Onboarding() {
             <div className="w-20 h-20 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto">
               <span className="material-symbols-outlined text-red-400 text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>emergency</span>
             </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Emergency Contact</h2>
-            <p className="text-xs text-slate-500 dark:text-gray-400 max-w-xs mx-auto">Add a trusted contact who will be alerted during SOS emergencies</p>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">{t('emergencyContactTitle', 'Emergency Contact')}</h2>
+              <p className="text-sm text-slate-500 dark:text-gray-400 mt-2 px-4 leading-relaxed">
+                {t('emergencyContactDesc', 'Add a trusted contact who will be alerted during SOS emergencies')}
+              </p>
+            </div>
           </div>
 
           {/* Form */}
@@ -1169,23 +1213,23 @@ export default function Onboarding() {
                 type="text"
                 value={ecName}
                 onChange={(e) => setEcName(e.target.value)}
-                placeholder="e.g. Ravi Kumar"
+                placeholder={t('contactNamePlaceholder', 'e.g. Ravi Kumar')}
                 className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3.5 text-slate-900 dark:text-white text-sm placeholder:text-slate-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-[#FF9933]/50 transition-colors"
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">Phone Number</label>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">{t('phoneNumber', 'Phone Number')}</label>
               <input
                 type="tel"
                 value={ecPhone}
                 onChange={(e) => setEcPhone(e.target.value)}
-                placeholder="e.g. 9876543210"
+                placeholder={t('phonePlaceholder', 'e.g. 9876543210')}
                 maxLength={10}
                 className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3.5 text-slate-900 dark:text-white text-sm placeholder:text-slate-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-[#FF9933]/50 transition-colors font-mono"
               />
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">Relationship</label>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">{t('relationship', 'Relationship')}</label>
               <div className="flex gap-2 flex-wrap">
                 {['Family', 'Friend', 'Spouse', 'Neighbour', 'Other'].map((rel) => (
                   <button
@@ -1196,7 +1240,7 @@ export default function Onboarding() {
                       : 'bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-slate-500 dark:text-gray-400 hover:bg-black/10 dark:bg-white/10'
                       }`}
                   >
-                    {rel}
+                    {t(rel, rel)}
                   </button>
                 ))}
               </div>
@@ -1207,7 +1251,7 @@ export default function Onboarding() {
           {profile && profile.emergencyContacts.length > 0 && (
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
               <p className="text-[10px] text-emerald-400 font-bold">
-                ✔ {profile.emergencyContacts.length} emergency contact{profile.emergencyContacts.length > 1 ? 's' : ''} already linked
+                ✔ {profile.emergencyContacts.length} {t('emergencyContacts', 'emergency contact')}{profile.emergencyContacts.length > 1 ? 's' : ''} {t('alreadyLinked', 'already linked')}
               </p>
             </div>
           )}
@@ -1243,33 +1287,33 @@ export default function Onboarding() {
     const slides = [
       {
         emoji: '🤖',
-        title: '5 AI Agents at your service',
-        titleHi: 'आपकी सेवा में 5 AI सहायक',
+        title: t('tourAgentsTitle', '5 AI Agents at your service'),
+        subtitle: t('tourAgentsSubtitle', 'आपकी सेवा में 5 AI सहायक'),
         agents: [
-          { name: 'Nagarik Mitra', desc: 'Civic & government services', icon: 'account_balance', color: 'bg-blue-500/20 text-blue-400' },
-          { name: 'Swasthya Sahayak', desc: 'Health guidance & hospitals', icon: 'medical_services', color: 'bg-red-500/20 text-red-400' },
-          { name: 'Yojana Saathi', desc: 'Welfare schemes & benefits', icon: 'volunteer_activism', color: 'bg-green-500/20 text-green-400' },
-          { name: 'Arthik Salahkar', desc: 'Financial advice & banking', icon: 'payments', color: 'bg-yellow-500/20 text-yellow-400' },
-          { name: 'Vidhi Sahayak', desc: 'Legal aid & rights', icon: 'gavel', color: 'bg-purple-500/20 text-purple-400' },
+          { name: 'Nagarik Mitra', desc: t('tournmDesc', 'Civic & government services'), icon: 'account_balance', color: 'bg-blue-500/20 text-blue-400' },
+          { name: 'Swasthya Sahayak', desc: t('tourssDesc', 'Health guidance & hospitals'), icon: 'medical_services', color: 'bg-red-500/20 text-red-400' },
+          { name: 'Yojana Saathi', desc: t('tourysDesc', 'Welfare schemes & benefits'), icon: 'volunteer_activism', color: 'bg-green-500/20 text-green-400' },
+          { name: 'Arthik Salahkar', desc: t('tourasDesc', 'Financial advice & banking'), icon: 'payments', color: 'bg-yellow-500/20 text-yellow-400' },
+          { name: 'Vidhi Sahayak', desc: t('tourvsDesc', 'Legal aid & rights'), icon: 'gavel', color: 'bg-purple-500/20 text-purple-400' },
         ],
       },
       {
         emoji: '🎙️',
-        title: 'Voice-first in 22 languages',
-        titleHi: '22 भाषाओं में बोलकर करें',
+        title: t('tourVoiceTitle', 'Voice-first in 22 languages'),
+        subtitle: t('tourVoiceSubtitle', '22 भाषाओं में बोलकर करें'),
         features: [
-          { icon: 'mic', text: 'Just speak your question — no typing needed' },
-          { icon: 'translate', text: 'Automatic Hinglish, Bhojpuri, Maithili support' },
-          { icon: 'record_voice_over', text: 'Text-to-speech replies in your language' },
-          { icon: 'accessibility_new', text: 'Designed for low-literacy users' },
+          { icon: 'mic', text: t('tourVoice1', 'Just speak your question — no typing needed') },
+          { icon: 'translate', text: t('tourVoice2', 'Automatic Hinglish, Bhojpuri, Maithili support') },
+          { icon: 'record_voice_over', text: t('tourVoice3', 'Text-to-speech replies in your language') },
+          { icon: 'accessibility_new', text: t('tourVoice4', 'Designed for low-literacy users') },
         ],
       },
       {
         emoji: '🏛️',
-        title: 'Schemes Scanner',
-        titleHi: 'आपके लिए योजनाएं खोजें',
+        title: t('schemeScanner', 'Schemes Scanner'),
+        subtitle: t('tourSchemesSubtitle', 'आपके लिए योजनाएं खोजें'),
         schemes: profile?.eligibleSchemes.slice(0, 5) ?? [],
-        note: `${Math.max(0, (profile?.eligibleSchemes.length ?? 11) - 5)} more schemes found based on your Aadhaar profile`,
+        note: t('tourSchemesNote', 'more schemes found based on your Aadhaar profile').replace('%d', String(Math.max(0, (profile?.eligibleSchemes.length ?? 11) - 5))),
       },
     ];
     const slide = slides[tourSlide];
@@ -1288,7 +1332,7 @@ export default function Onboarding() {
           <div className="text-center mb-6">
             <span className="text-5xl">{slide.emoji}</span>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-3">{slide.title}</h2>
-            <p className="text-sm text-[#FF9933] mt-0.5">{slide.titleHi}</p>
+            {lang === 'hi' ? null : <p className="text-sm text-[#FF9933] mt-0.5">{slide.subtitle}</p>}
           </div>
 
           {/* Slide 0 – Agents */}
@@ -1386,24 +1430,24 @@ export default function Onboarding() {
           </div>
 
           <div>
-            <p className="text-sm text-slate-500 dark:text-gray-400 mb-1">नमस्ते / Welcome</p>
+            <p className="text-sm text-slate-500 dark:text-gray-400 mb-1">{t('welcomeOnboard', 'नमस्ते / Welcome')}</p>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white">{profile.name}</h1>
             <p className="text-sm text-slate-500 dark:text-gray-400 mt-1">{profile.district}, {profile.state}</p>
           </div>
 
           {/* Karma seed */}
           <div className="bg-gradient-to-r from-[#FF9933]/15 to-[#138808]/15 border border-[#FF9933]/30 rounded-2xl px-6 py-4">
-            <p className="text-[11px] text-slate-500 dark:text-gray-400 mb-1">You've been awarded</p>
-            <p className="text-3xl font-black text-[#FF9933]">+50 Karma</p>
-            <p className="text-[11px] text-slate-500 dark:text-gray-400 mt-1">for completing Aadhaar verification</p>
+            <p className="text-[11px] text-slate-500 dark:text-gray-400 mb-1">{t('awardedText', "You've been awarded")}</p>
+            <p className="text-3xl font-black text-[#FF9933]">{t('karmaPoints', '+50 Karma')}</p>
+            <p className="text-[11px] text-slate-500 dark:text-gray-400 mt-1">{t('karmaReason', 'for completing Aadhaar verification')}</p>
           </div>
 
           {/* Quick links */}
           <div className="w-full grid grid-cols-3 gap-2">
             {[
-              { icon: 'grain', label: 'PM-KISAN Status', color: 'text-green-400' },
-              { icon: 'medical_services', label: 'Ayushman Card', color: 'text-red-400' },
-              { icon: 'record_voice_over', label: `Ask in ${LANG_DISPLAY_NAME[profile?.language ?? 'hi'] ?? 'Hindi'}`, color: 'text-[#FF9933]' },
+              { icon: 'grain', label: t('pmKisanStatus', 'PM-KISAN Status'), color: 'text-green-400' },
+              { icon: 'medical_services', label: t('ayushmanCard', 'Ayushman Card'), color: 'text-red-400' },
+              { icon: 'record_voice_over', label: t('askInLang', 'Ask in %s').replace('%s', String(LANG_DISPLAY_NAME[profile?.language ?? 'hi']) || 'Hindi'), color: 'text-[#FF9933]' },
             ].map((item, i) => (
               <div key={i} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-3 flex flex-col items-center gap-1.5">
                 <span className={`material-symbols-outlined ${item.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
@@ -1413,8 +1457,8 @@ export default function Onboarding() {
           </div>
 
           <p className="text-[10px] text-gray-600 leading-relaxed max-w-[280px]">
-            Bharat Setu is a Digital Public Infrastructure initiative.<br />
-            Powered by Azure AI · ISRO DIGIPIN · DigiLocker · UIDAI
+            {t('dpiInitiative', 'Bharat Setu is a Digital Public Infrastructure initiative.')}<br />
+            {t('poweredByInfo', 'Powered by Azure AI · ISRO DIGIPIN · DigiLocker · UIDAI')}
           </p>
         </div>
 
@@ -1424,9 +1468,8 @@ export default function Onboarding() {
             className="w-full bg-gradient-to-r from-[#FF9933] to-[#138808] text-slate-900 dark:text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-orange-500/20 text-base"
           >
             <span className="material-symbols-outlined">rocket_launch</span>
-            भारत सेतु में प्रवेश करें
+            {t('enterBharatSetu', 'Enter Bharat Setu')}
           </button>
-          <p className="text-center text-[10px] text-gray-600 mt-2">Enter Bharat Setu</p>
         </div>
         <FlagStripe />
         <div className="absolute top-4 right-4 z-[300]"><ThemeToggle /></div>

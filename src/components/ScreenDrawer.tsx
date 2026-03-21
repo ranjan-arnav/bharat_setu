@@ -1,6 +1,6 @@
 'use client';
 
-import { ScreenKey, SCREENS } from '@/lib/screens';
+import { ScreenKey } from '@/lib/screens';
 import { useTranslation } from '@/lib/i18n/useTranslation';
 
 interface ScreenDrawerProps {
