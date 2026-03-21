@@ -1,9 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useAppStore, type AgentKey } from '@/lib/store';
 import { FlagStripe, AshokaChakra } from '@/components/ui/GoiElements';
 import { useTranslation } from '@/lib/i18n/useTranslation';
+import { startAzureSttCapture, type WebSttSession } from '@/lib/web-stt';
 
 // ── Language options for STT ────────────────────────────────────────────────
 // Covers all 22 scheduled languages supported in onboarding
@@ -39,6 +40,7 @@ const AGENT_META: Record<AgentKey, { nameEn: string; nameHi: string; icon: strin
   yojana_saathi: { nameEn: 'Yojana Saathi', nameHi: 'योजना साथी', icon: '📋', color: '#a855f7', specialty: 'Government schemes, subsidies, pension, ration' },
   arthik_salahkar: { nameEn: 'Arthik Salahkar', nameHi: 'अर्थिक सलाहकार', icon: '💰', color: '#f59e0b', specialty: 'Banking, loans, UPI fraud, financial guidance' },
   vidhi_sahayak: { nameEn: 'Vidhi Sahayak', nameHi: 'विधि सहायक', icon: '⚖️', color: '#ef4444', specialty: 'FIR, police, court, legal rights, disputes' },
+  kisan_mitra: { nameEn: 'Kisan Mitra', nameHi: 'किसान मित्र', icon: '🌾', color: '#84cc16', specialty: 'Crop advice, farming subsidies, tractors, weather, mandi prices' },
 };
 
 // ── Intent keyword definitions (scored — best cumulative match wins) ─────────
@@ -86,7 +88,7 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
   },
   {
     keywords: [
-      'rti', 'certificate', 'pramanpatra', 'birth certificate', 'death certificate', 'property', 'digipin',
+      'certificate', 'pramanpatra', 'birth certificate', 'death certificate', 'property', 'digipin',
       'प्रमाणपत्र', 'जन्म', 'मृत्यु', 'संपत्ति', 'शिकायत',
     ], agent: 'nagarik_mitra', topic: 'Civic Certificate'
   },
@@ -95,9 +97,11 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
       // Transliterated
       'hospital', 'aspatal', 'dawai', 'dawa', 'medicine', 'doctor', 'beemar', 'bimar', 'health', 'swasthya',
       'ambulance', 'blood', 'fever', 'bukhar', 'sick', 'ilaj', 'treatment', 'tablet', 'dard', 'pain', 'khansi', 'ulti',
+      'feel', 'feeling', 'tabiyat', 'tabeeyat', 'ajeeb', 'ghabra', 'ghabrahat', 'theek nahi', 'thik nahi',
+      'sehat', 'chakkar', 'kamzori', 'weakness', 'dizziness', 'unwell', 'bura lag', 'man kharab', 'fit nahi',
       // Devanagari (Hindi) — critical for correct routing
       'डॉक्टर', 'दवा', 'दवाई', 'अस्पताल', 'बीमार', 'बुखार', 'दर्द', 'खांसी', 'उल्टी',
-      'इलाज', 'स्वास्थ्य', 'तबियत', 'बीमारी',
+      'इलाज', 'स्वास्थ्य', 'तबियत', 'बीमारी', 'अजीब', 'घबराहट', 'ठीक नहीं', 'सेहत', 'चक्कर', 'कमज़ोरी',
       // Other scripts
       'হাসপাতাল', 'ডাক্তার', 'ওষুধ', 'ఆసుపత్రి', 'డాక్టర్', 'మందు',
       'மருத்துவமனை', 'டாக்டர்', 'மருந்து', 'रुग्णालय', 'औषध',
@@ -155,6 +159,7 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
       'fir', 'f.i.r', 'police', 'pulis', 'kanoon', 'law', 'court', 'vakeel', 'lawyer', 'legal',
       'arrest', 'giraftar', 'bail', 'nyaya', 'adhikar', 'right', 'case file', 'complain police',
       'consumer', 'dispute', 'domestic', 'dowry', 'thana', 'nalsa',
+      'rti', 'r.t.i', 'right to information', 'suchna adhikar', 'सूचना का अधिकार', 'सूचना',
       // Land / property (legal)
       'land', 'zameen', 'zamin', 'jamin', 'jameen', 'bhumi', 'bhoomi', 'acquisition',
       'muavja', 'muavza', 'compensation', 'kabja', 'kabza', 'encroach', 'atikraman',
@@ -173,6 +178,16 @@ const INTENT_DEFS: { keywords: string[]; agent: AgentKey; topic: string }[] = [
       'ಪೊಲೀಸ್', 'ನ್ಯಾಯಾಲಯ', 'ಕಾನೂನು', 'ಭೂಮಿ', 'ಆಸ್ತಿ',
       'പോലീസ്', 'കോടതി', 'നിയമം', 'ഭൂമി', 'സ്വത്ത്',
     ], agent: 'vidhi_sahayak', topic: 'Legal Help'
+  },
+  {
+    keywords: [
+      // Transliterated
+      'kheti', 'agriculture', 'kisan', 'kisaan', 'farmer', 'crop', 'fasal', 'khad', 'khaad',
+      'fertilizer', 'seed', 'beej', 'irrigation', 'sinchai', 'tractor', 'weather', 'mausam',
+      'soil', 'mitti', 'market', 'mandi', 'bhav', 'bhaav',
+      // Devanagari
+      'किसान', 'खेती', 'फसल', 'खाद', 'बीज', 'मंडी', 'भाव', 'मौसम', 'सिंचाई', 'ट्रैक्टर',
+    ], agent: 'kisan_mitra', topic: 'Agriculture'
   },
 ];
 
@@ -212,9 +227,9 @@ export default function VoiceAssistant({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [statusMsg, setStatusMsg] = useState('');
   const [classifySource, setClassifySource] = useState<'local' | 'api' | null>(null);
+  const [secondaryAgent, setSecondaryAgent] = useState<AgentKey | null>(null);
 
-  const recognitionRef = useRef<{ stop: () => void } | null>(null);
-  const finalTranscriptRef = useRef('');
+  const sttSessionRef = useRef<WebSttSession | null>(null);
 
   // Animated waveform bars (re-randomised each time listening starts)
   const waveHeights = useMemo(
@@ -236,80 +251,51 @@ export default function VoiceAssistant({
   }, [countdown]);
 
   const startListening = useCallback(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      setStatusMsg('Speech recognition not supported — please use Chrome or Edge.');
-      return;
-    }
-    const recognition = new SR();
+    setListening(true);
+    setLocalTranscript('');
+    setInterimTranscript('');
+    setConfidence(0);
+    setDetectedIntent(null);
+    setShowManualPicker(false);
+    setCountdown(null);
+    setStatusMsg('');
 
-    // Map unsupported browser STT languages to closest supported neighbors
-    const sttLangMap: Record<string, string> = {
-      'mai': 'hi-IN', 'doi': 'hi-IN', 'brx': 'hi-IN', 'kok': 'mr-IN',
-      'as': 'bn-IN', 'mni': 'en-IN', 'sat': 'en-IN', 'ks': 'ur-IN', 'sd': 'ur-IN', 'or': 'hi-IN'
-    };
-    const baseLang = language.split('-')[0];
-    recognition.lang = sttLangMap[baseLang] || language;
-
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setListening(true);
-      finalTranscriptRef.current = '';
-      setLocalTranscript('');
-      setInterimTranscript('');
-      setConfidence(0);
-      setDetectedIntent(null);
-      setShowManualPicker(false);
-      setCountdown(null);
-      setStatusMsg('');
-    };
-
-    recognition.onresult = (event: any) => {
-      let finalText = '';
-      for (let i = 0; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalText += event.results[i][0].transcript + ' ';
-          setConfidence(Math.round(event.results[i][0].confidence * 100));
+    startAzureSttCapture(language, 7000)
+      .then((session) => {
+        sttSessionRef.current = session;
+        return session.done;
+      })
+      .then((spokenText) => {
+        const finalText = spokenText.trim();
+        if (!finalText) {
+          setStatusMsg(t('No speech detected. Tap mic and try again.', 'No speech detected. Tap mic and try again.'));
+          return;
         }
-      }
-      if (finalText.trim() && finalText.trim() !== finalTranscriptRef.current) {
-        finalTranscriptRef.current = finalText.trim();
-        setLocalTranscript(finalTranscriptRef.current);
-      }
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (!event.results[i].isFinal) interim += event.results[i][0].transcript;
-      }
-      setInterimTranscript(interim);
-    };
-
-    recognition.onerror = (event: any) => {
-      if (event.error === 'not-allowed') setStatusMsg('Microphone access denied — allow it in browser settings.');
-      else if (event.error === 'no-speech') setStatusMsg('No speech detected. Tap mic and try again.');
-      else if (event.error === 'language-not-supported') {
-        // Browser doesn't support this lang for STT — fall back to Hindi
-        setStatusMsg('Your browser doesn\'t support this language for voice input. Switching to Hindi.');
-        setLanguage('hi-IN');
-      }
-      setListening(false);
-    };
-
-    recognition.onend = () => setListening(false);
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [language]);
+        setLocalTranscript(finalText);
+        setInterimTranscript('');
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '';
+        if (message !== 'cancelled') {
+          if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('denied')) {
+            setStatusMsg(t('Microphone access denied — allow it in browser settings.', 'Microphone access denied — allow it in browser settings.'));
+          } else {
+            setStatusMsg(message || t('No speech detected. Tap mic and try again.', 'No speech detected. Tap mic and try again.'));
+          }
+        }
+      })
+      .finally(() => {
+        sttSessionRef.current = null;
+        setListening(false);
+      });
+  }, [language, t]);
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-    setListening(false);
+    sttSessionRef.current?.stop();
   }, []);
 
   // Clean up mic on unmount
-  useEffect(() => () => recognitionRef.current?.stop(), []);
+  useEffect(() => () => sttSessionRef.current?.cancel(), []);
 
   // Trigger classification when listening stops and we have a transcript
   useEffect(() => {
@@ -335,6 +321,9 @@ export default function VoiceAssistant({
       setProcessing(false);
       setClassifySource('local');
       setDetectedIntent({ agent: localBest.agent, topic: localBest.topic });
+      // Surface second-best agent as handoff suggestion
+      const secondBest = scored.find((s) => s.agent !== localBest.agent);
+      setSecondaryAgent(secondBest ? secondBest.agent : null);
       setCountdown(4);
 
       // Background API refinement — updates silently if it strongly disagrees
@@ -360,6 +349,8 @@ export default function VoiceAssistant({
             const topic = INTENT_DEFS.find((d) => d.agent === apiBest)?.topic || 'Your Query';
             setClassifySource('api');
             setDetectedIntent({ agent: apiBest, topic });
+            // Old local result becomes the handoff secondary suggestion
+            setSecondaryAgent(localBest.agent);
           }
         })
         .catch(() => { /* ignore — local result stands */ });
@@ -368,7 +359,7 @@ export default function VoiceAssistant({
     }
 
     // ── SLOW PATH: no local match → wait for API (max 4 s) ──────────
-    setStatusMsg('Consulting AI classifier…');
+    setStatusMsg(t('Consulting AI classifier…', 'Consulting AI classifier…'));
     let apiBest: AgentKey | null = null;
     try {
       const res = await fetch('/api/agent', {
@@ -395,9 +386,15 @@ export default function VoiceAssistant({
 
     // Default to nagarik_mitra so the user always gets connected — never stall.
     const winner: AgentKey = apiBest || 'nagarik_mitra';
-    const topic = INTENT_DEFS.find((d) => d.agent === winner)?.topic || 'General Query';
+    const topic = apiBest
+      ? (INTENT_DEFS.find((d) => d.agent === winner)?.topic || 'General Query')
+      : 'General Query';
     setClassifySource(apiBest ? 'api' : 'local');
     setDetectedIntent({ agent: winner, topic });
+    // Surface second-best scored agent as handoff suggestion for slow path too
+    const allScored = scoreIntents(text);
+    const secondBestSlow = allScored.find((s) => s.agent !== winner);
+    setSecondaryAgent(secondBestSlow ? secondBestSlow.agent : null);
     setCountdown(4);
   };
 
@@ -420,7 +417,7 @@ export default function VoiceAssistant({
     setStatusMsg('');
     setConfidence(0);
     setClassifySource(null);
-    finalTranscriptRef.current = '';
+    setSecondaryAgent(null);
   };
 
   const meta = detectedIntent ? AGENT_META[detectedIntent.agent] : null;
@@ -438,13 +435,13 @@ export default function VoiceAssistant({
         <div className="flex-1 text-center">
           <div className="flex items-center justify-center gap-2">
             <AshokaChakra size={16} color="#5b8def" spin />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Voice Assistant</h2>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">{t('voiceAssistantTitle', 'Voice Assistant')}</h2>
             <AshokaChakra size={16} color="#5b8def" spin />
           </div>
           <div className="flex items-center justify-center gap-1 mt-0.5">
             <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
             <span className="text-[10px] text-slate-500 dark:text-gray-400">
-              {langOptions.find((l) => l.code === language)?.label} · AI Classification Active
+              {langOptions.find((l) => l.code === language)?.label} · {t('aiClassificationActive', 'AI Classification Active')}
             </span>
           </div>
         </div>
@@ -481,7 +478,7 @@ export default function VoiceAssistant({
               <span className="text-sm font-bold text-slate-900 dark:text-white">
                 {langOptions.find((l) => l.code === language)?.label}
               </span>
-              <button onClick={() => setShowLangPicker(true)} className="text-[10px] text-slate-500 dark:text-gray-400 underline ml-1">change</button>
+              <button onClick={() => setShowLangPicker(true)} className="text-[10px] text-slate-500 dark:text-gray-400 underline ml-1">{t('change', 'change')}</button>
             </div>
 
             {/* Waveform while listening */}
@@ -528,17 +525,17 @@ export default function VoiceAssistant({
               <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-2xl p-4 w-full">
                 <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider mb-2">{t('trySaying')}</p>
                 <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-gray-300">
-                  <span>❝ Mere ghar ke paas pani nahi aa raha ❞</span>
-                  <span>❝ Mujhe PM-KISAN ka paisa nahi mila ❞</span>
-                  <span>❝ Bank se fraud call aaya, OTP le liya ❞</span>
-                  <span>❝ FIR likhne se police mana kar rahi hai ❞</span>
+                  <span>❝ {t('voiceSampleWaterIssue', 'Mere ghar ke paas pani nahi aa raha')} ❞</span>
+                  <span>❝ {t('voiceSamplePmKisanPayment', 'Mujhe PM-KISAN ka paisa nahi mila')} ❞</span>
+                  <span>❝ {t('voiceSampleFraudOtp', 'Bank se fraud call aaya, OTP le liya')} ❞</span>
+                  <span>❝ {t('voiceSamplePoliceFirRefusal', 'FIR likhne se police mana kar rahi hai')} ❞</span>
                 </div>
               </div>
             )}
 
             {confidence > 0 && (
               <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 px-3 py-1 rounded-full border border-black/10 dark:border-white/10">
-                <span className="text-[10px] text-slate-500 dark:text-gray-400">Speech confidence:</span>
+                <span className="text-[10px] text-slate-500 dark:text-gray-400">{t('Speech confidence:', 'Speech confidence:')}</span>
                 <span className={`text-[10px] font-bold ${confidence > 80 ? 'text-green-400' : 'text-amber-400'}`}>{confidence}%</span>
               </div>
             )}
@@ -592,34 +589,34 @@ export default function VoiceAssistant({
                   {meta.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">{t('bestAgentForQuery')}</div>
-                  <div className="text-lg font-bold text-slate-900 dark:text-white truncate">{meta.nameEn}</div>
-                  <div className="text-sm font-semibold" style={{ color: meta.color }}>{meta.nameHi}</div>
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">{t('bestAgentForQuery', 'Best match for your query')}</div>
+                  <div className="text-lg font-bold text-slate-900 dark:text-white truncate">{t(meta.nameEn, meta.nameEn)}</div>
+                  <div className="text-sm font-semibold" style={{ color: meta.color }}>{t(meta.nameHi, meta.nameHi)}</div>
                 </div>
                 <span
                   className="text-[10px] font-bold px-2 py-1 rounded-full shrink-0"
                   style={{ background: `${meta.color}25`, color: meta.color }}
                 >
-                  {classifySource === 'api' ? '✓ AI' : '⚡ Local'}
+                  {classifySource === 'api' ? t('✓ AI', '✓ AI') : t('⚡ Local', '⚡ Local')}
                 </span>
               </div>
 
               <div className="bg-black/5 dark:bg-black/25 rounded-xl px-3 py-2">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase">{t('topicDetected')}</span>
-                <p className="text-sm text-slate-900 dark:text-white font-semibold mt-0.5">🎯 {detectedIntent.topic}</p>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase">{t('topicDetected', 'Topic Detected')}</span>
+                <p className="text-sm text-slate-900 dark:text-white font-semibold mt-0.5">🎯 {t(detectedIntent.topic, detectedIntent.topic)}</p>
               </div>
 
               <div className="bg-black/5 dark:bg-black/25 rounded-xl px-3 py-2">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase">{t('specialisesIn')}</span>
-                <p className="text-xs text-slate-600 dark:text-gray-300 mt-0.5">{meta.specialty}</p>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase">{t('specialisesIn', 'Specialises In')}</span>
+                <p className="text-xs text-slate-600 dark:text-gray-300 mt-0.5">{t(meta.specialty, meta.specialty)}</p>
               </div>
 
               {/* Countdown progress */}
               {countdown !== null && countdown > 0 && (
                 <div>
                   <div className="flex justify-between text-[10px] text-slate-500 dark:text-gray-400 mb-1.5">
-                    <span>{t('autoConnecting')} {countdown}s…</span>
-                    <button onClick={cancelAndPick} className="text-red-400 font-bold underline">{t('cancel')}</button>
+                    <span>{t('autoConnecting', 'Auto-connecting in ')} {countdown}s…</span>
+                    <button onClick={cancelAndPick} className="text-red-400 font-bold underline">{t('cancel', 'Cancel')}</button>
                   </div>
                   <div className="h-1.5 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
                     <div
@@ -640,6 +637,28 @@ export default function VoiceAssistant({
               <span className="material-symbols-outlined">chat</span>
               {t('talkTo')} {meta.nameEn}
             </button>
+
+            {/* Agent handoff suggestion — mirrors chat handoff card */}
+            {secondaryAgent && (
+              <button
+                onClick={() => goToAgent(secondaryAgent)}
+                className="w-full rounded-2xl border p-4 flex items-center gap-3 active:scale-[0.98] transition-all text-left"
+                style={{ background: `${AGENT_META[secondaryAgent].color}0d`, borderColor: `${AGENT_META[secondaryAgent].color}35` }}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                  style={{ background: `${AGENT_META[secondaryAgent].color}25` }}
+                >
+                  {AGENT_META[secondaryAgent].icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">🔁 {t('alsoTry', 'Also try')}</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white">{t(AGENT_META[secondaryAgent].nameEn, AGENT_META[secondaryAgent].nameEn)}</div>
+                  <div className="text-[11px]" style={{ color: AGENT_META[secondaryAgent].color }}>{t(AGENT_META[secondaryAgent].nameHi, AGENT_META[secondaryAgent].nameHi)} {t('से भी बात करें?', 'से भी बात करें?')}</div>
+                </div>
+                <span className="material-symbols-outlined text-slate-400 shrink-0">arrow_forward</span>
+              </button>
+            )}
 
             <div className="flex gap-2">
               <button
@@ -663,11 +682,11 @@ export default function VoiceAssistant({
         {showManualPicker && (
           <div className="w-full flex flex-col gap-3">
             <div className="text-center">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">{t('whoCanHelp')}</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">{t('whoCanHelp', 'Who can help you?')}</p>
               {transcript ? (
                 <p className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 italic">❝ {transcript.slice(0, 70)}{transcript.length > 70 ? '…' : ''} ❞</p>
               ) : (
-                <p className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5">Select the agent that best matches your query</p>
+                <p className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5">{t('Select the agent that best matches your query', 'Select the agent that best matches your query')}</p>
               )}
             </div>
 
@@ -687,9 +706,9 @@ export default function VoiceAssistant({
                     {m.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">{m.nameEn}</div>
-                    <div className="text-[11px] font-semibold" style={{ color: m.color }}>{m.nameHi}</div>
-                    <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 truncate">{m.specialty}</div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">{t(m.nameEn, m.nameEn)}</div>
+                    <div className="text-[11px] font-semibold" style={{ color: m.color }}>{t(m.nameHi, m.nameHi)}</div>
+                    <div className="text-[10px] text-slate-500 dark:text-gray-400 mt-0.5 truncate">{t(m.specialty, m.specialty)}</div>
                   </div>
                   <span className="material-symbols-outlined text-gray-500 shrink-0">chevron_right</span>
                 </button>

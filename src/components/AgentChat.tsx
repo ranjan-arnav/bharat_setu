@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useAppStore, type AgentKey } from '@/lib/store';
 import { agentConfigs } from '@/lib/azure-config';
 import { DEMO_AGENT_RESPONSES, getTypingDelay } from '@/lib/demo-data';
@@ -9,6 +10,7 @@ import GovStatusBar from './GovStatusBar';
 import RichChatCard, { type ParsedCard } from './RichChatCard';
 import { FlagStripe, GoiBadge } from '@/components/ui/GoiElements';
 import { useTranslation } from '@/lib/i18n/useTranslation';
+import { startAzureSttCapture, type WebSttSession } from '@/lib/web-stt';
 
 /** Returns a localised "added to Track tab" toast message */
 function getTrackAddedMsg(language?: string): string {
@@ -95,16 +97,18 @@ const agents: { key: AgentKey; name: string; nameHi: string; icon: string; color
   { key: 'yojana_saathi', name: 'Yojana Saathi', nameHi: 'योजना साथी', icon: 'volunteer_activism', color: '#F59E0B', shortName: 'YS' },
   { key: 'arthik_salahkar', name: 'Arthik Salahkar', nameHi: 'आर्थिक सलाहकार', icon: 'account_balance_wallet', color: '#8B5CF6', shortName: 'AS' },
   { key: 'vidhi_sahayak', name: 'Vidhi Sahayak', nameHi: 'विधि सहायक', icon: 'gavel', color: '#EF4444', shortName: 'VS' },
+  { key: 'kisan_mitra', name: 'Kisan Mitra', nameHi: 'किसान मित्र', icon: 'agriculture', color: '#84CC16', shortName: 'KM' },
 ];
 
 // Keyword → Agent intent detection for smart routing
 // Includes phonetic/transliterated Hindi variants and common typos
 const AGENT_KEYWORDS: Record<AgentKey, RegExp> = {
-  nagarik_mitra: /(street\s?light|road|sadak|सड़क|paani|pani|पानी|water|bijli|bijlee|बिजली|electric|safai|safaai|सफाई|garbage|kachra|nagar\s?nigam|municipal|rti|birth\s?cert|death\s?cert|property|ration\s?card|rashan|digipin|infrastr|sewage|drain|nalaa|nala|pothole|gadha|complaint|shikayat|shikaayat|शिकायत|pramanpatra|praman\s?patra|प्रमाणपत्र|sampatti|संपत्ति|राशन|sadak|bijli|sewer|light\s?pole|lamp\s?post|জল|পানি|রাস্তা|বিদ্যুৎ|নালা|আবর্জনা|নগর|నీళ్ళు|రోడ్డు|కరెంట్|వీధి|తాగునీరు|தண்ணீர்|சாலை|மின்சாரம்|கால்வாய்|குப்பை|पाणी|रस्ता|वीज|ड्रेनेज|ಕುಡಿಯುವ ನೀರು|ರಸ್ತೆ|ವಿದ್ಯುತ್|ಚರಂಡಿ|ಕಸ|വെള്ളം|റോഡ്|വൈദ്യുതി|ഡ്രൈനേജ്|ਪਾਣੀ|ਸੜਕ|ਬਿਜਲੀ|ਨਾਲਾ)/i,
+  nagarik_mitra: /(street\s?light|road|sadak|सड़क|paani|pani|पानी|water|bijli|bijlee|बिजली|electric|safai|safaai|सफाई|garbage|kachra|nagar\s?nigam|municipal|birth\s?cert|death\s?cert|property|ration\s?card|rashan|digipin|infrastr|sewage|drain|nalaa|nala|pothole|gadha|complaint|shikayat|shikaayat|शिकायत|pramanpatra|praman\s?patra|प्रमाणपत्र|sampatti|संपत्ति|राशन|sadak|bijli|sewer|light\s?pole|lamp\s?post|জল|পানি|রাস্তা|বিদ্যুৎ|নালা|আবর্জনা|নগর|నీళ్ళు|రోడ్డు|కరెంట్|వీధి|తాగునీరు|தண்ணீர்|சாலை|மின்சாரம்|கால்வாய்|குப்பை|पाणी|रस्ता|वीज|ड्रेनेज|ಕುಡಿಯುವ ನೀರು|ರಸ್ತೆ|ವಿದ್ಯುತ್|ಚರಂಡಿ|ಕಸ|വെള്ളം|റോഡ്|വൈദ്യുതി|ഡ്രൈനേജ്|ਪਾਣੀ|ਸੜਕ|ਬਿਜਲੀ|ਨਾਲਾ)/i,
   swasthya_sahayak: /(hospital|hosptl|aspatal|aspataal|doctor|daktar|doktar|health|helth|স্বাস্থ্য|swasthya|vaccin|vaxin|vaksin|vakcin|tika|teeka|teekaa|टीका|medicin|dawai|dawa|davai|दवाई|ayushman|aayushman|আয়ুষ্মান|ambulance|ambulans|এম্বুলেন্স|blood|khoon|বীমার|bimar|beemar|sick|fever|bukhar|bukhaar|বুখার|covid|pregnan|garbh|গর্ভ|abdm|u-?win|uwin|ilaj|ilaaj|treatment|checkup|check-?up|rog|rogi|bimari|bimaari|দবা|sehat|tablet|injection|clinic|tabiyat|tabeeyat|तबियत|thik\s?nahi?|ठीक नहीं|unwell|not\s?well|not\s?feeling|feeling\s?(sick|ill|bad|unwell|dizzy)|feel\s?(sick|bad|ill|unwell)|i.?m\s+(sick|ill|unwell)|body\s?(pain|ache)|headache|sore\s?throat|high\s?temp|ill\b|feel\s?nahi?|dard|দর্দ|স্বাস্থ্য|ডাক্তার|ওষুধ|অসুস্থ|টিকা|জ্বর|ఆసుపత్రి|డాక్టర్|మందు|జబ్బు|టీకా|జ్వరం|மருத்துவமனை|டாக்டர்|மருந்து|நோய்|தடுப்பூசி|காய்ச்சல்|रुग्णालय|औषध|आजारी|लस|ताप|ಆಸ್ಪತ್ರೆ|ವೈದ್ಯ|ಔಷಧ|ಜ್ವರ|ആശുപത്രി|ഡോക്ടർ|മരുന്ന്|പനി|ਹਸਪਤਾਲ|ਡਾਕਟਰ|ਦਵਾਈ|ਬਿਮਾਰ|eating|khaana|khana|khana\s?nahi|khana\s?nahi?|not\s?eating|loss\s?of\s?appetite|bhookh\s?nahi|bhojan|poop|stool|latrine|motion|loose\s?motion|diarrhea|diarrhoea|daast|dast|दस्त|ulti|ultee|vomit|उल्टी|nausea|ghbrahat|nauzia|digest|digestive|pet\s?kharab|khana\s?nahi\s?pa|peena|drinking\s?problem|pain\s?eating|khana\s?khaane\s?mein|pina|पेट खराब|dysentr|cholera|dehydr|kamzori|weakness|dizziness|chakkar|चक्कर|weight\s?loss|vajan\s?kam|appetite|bhookh|भूख|पीना|खाना|addict|addiction|obsess|craving|paglu|naasha|nasha|नशा|alcohol|smoking|cigaret|drug\s?habit|junk\s?food|diet\s?coke|mental\s?health|anxiety|depress|stress|phobia|aadat|adat|आदत|latt|lat)/i,
   yojana_saathi: /(scheme|skeem|yojana|yojna|योजना|pm[\s-]?kisan|kisan|kisaan|কিষান|subsidy|subsidi|sabsidi|সাবসিডি|awas|aavas|awaas|housing|makan|makaan|মাকান|mgnrega|mnrega|narega|nrega|নরেগা|ujjwala|ujwala|ujala|গ্যাস|gas|fasal\s?bima|crop|fasal|ফসল|enroll|patrata|paatrata|পাত্রতা|eligib|registr|panjikaran|panjikran|পঞ্জিকরণ|welfare|sarkari|government\s?scheme|labh|laabh|pension|ration|ayushman|ayushmann|ayushmaan|pmjay|pm-?jay|আয়ুষ্মান|যোজনা|প্রকল্প|পেনশন|রেশন|ভর্তুকি|কৃষক|పథకం|యోజన|పెన్షన్|రేషన్|సబ్సిడీ|రైతు|திட்டம்|யோஜனை|ஓய்வூதியம்|ரேஷன்|மானியம்|விவசாயி|योजना|पेन्शन|रेशन|शेतकरी|ಯೋಜನೆ|ಪಿಂಚಣಿ|ರೇಷನ್|ರೈತ|പദ്ധതി|പെൻഷൻ|ਯੋਜਨਾ|ਪੈਨਸ਼ਨ|ਰਾਸ਼ਨ|ਕਿਸਾਨ)/i,
   arthik_salahkar: /(scam|skam|fraud|frod|dhokha|धोखा|otp|upi|loan|lon|লোন|mudra|মুদ্রা|bank|baink|বাইংক|jan\s?dhan|saving|bachat|বচত|invest|nivesh|নিবেশ|money|paisa|paise|পাইসা|payment|paymnt|financi|emi|credit|debit|digital\s?pay|phishing|cyber\s?fraud|mulehunter|cheat|thug|thagi|thagee|ঠগি|loot|rupay|rupee|atm|wallet|account|khata|খাতা|ব্যাংক|ঋণ|জালিয়াতি|প্রতারণা|ইউপিআই|బ్యాంకు|రుణం|మోసం|సైబర్|வங்கி|கடன்|மோசடி|சைபர்|बँक|कर्ज|फसवणूक|ਬੈਂਕ|ਕਰਜ਼|ਧੋਖਾ|ಬ್ಯಾಂಕ್|ಸಾಲ|ವಂಚನೆ|ಸೈಬರ್|ബാങ്ക്|വായ്പ|തട്ടിപ്പ്|സൈബർ)/i,
-  vidhi_sahayak: /(fir|f\.i\.r|police|pulis|pulice|পুলিশ|court|kort|আদালত|legal|legl|kanoon|kानून|কানুন|law|adhikar|অধিকার|right|arrest|giraftar|giraftaar|গ্রেফতার|bail|zamanat|jamanat|জামানত|nalsa|nyaya|nyay|ন্যায়|consumer|upbhokta|উপভোক্তা|lawyer|vakil|vakeel|বাকিল|magistrate|dispute|vivad|vivaad|বিবাদ|domestic\s?violen|domestic\s?abuse|abuse|harassment|assault|rape|molest|stalk|dowry|dahej|দাহেজ|zero\s?fir|thana|chauki|case\s?file|complain\s?police|kanuni|घरेलू\s*हिंसा|मारपीट|उत्पीड़न|छेड़छाड़|बलात्कार|महिला\s*सुरक्षा|पति.*मार|पति.*पीट|পুলিশ|আদালত|আইন|অধিকার|এফআইআর|పోలీసు|న్యాయస్థానం|చట్టం|హక్కు|போலீஸ்|நீதிமன்றம்|சட்டம்|உரிமை|पोलीस|न्यायालय|कायदा|हक्क|ਪੁਲਿਸ|ਅਦਾਲਤ|ਕਾਨੂੰਨ|ਅਧਿਕਾਰ|ಪೊಲೀಸ್|ನ್ಯಾಯಾಲಯ|ಕಾನೂನು|ಹಕ್ಕು|പോലീസ്|കോടതി|നിയമം|അവകാശം)/i,
+  vidhi_sahayak: /(rti|r\.t\.i|right\s?to\s?info|सूचना\s?का\s?अधिकार|suchna\s?ka\s?adhikar|fir|f\.i\.r|police|pulis|pulice|পুলিশ|court|kort|আদালত|legal|legl|kanoon|kानून|কানুন|law|adhikar|অধিকার|right|arrest|giraftar|giraftaar|গ্রেফতার|bail|zamanat|jamanat|জামানত|nalsa|nyaya|nyay|ন্যায়|consumer|upbhokta|উপভোক্তা|lawyer|vakil|vakeel|বাকিল|magistrate|dispute|vivad|vivaad|বিবাদ|domestic\s?violen|domestic\s?abuse|abuse|harassment|assault|rape|molest|stalk|dowry|dahej|দাহেজ|zero\s?fir|thana|chauki|case\s?file|complain\s?police|kanuni|घरेलू\s*हिंसा|मारपीट|उत्पीड़न|छेड़छाड़|बलात्कार|महिला\s*सुरक्षा|पति.*मार|पति.*पीट|পুলিশ|আদালত|আইন|অধিকার|এফআইআর|పోలీసు|న్యాయస్థానం|చట్టం|హక్కు|போலீஸ்|நீதிமன்றம்|சட்டம்|உரிமை|पोलीस|न्यायालय|कायदा|हक्क|ਪੁਲਿਸ|ਅਦਾਲਤ|ਕਾਨੂੰਨ|ਅਧਿਕਾਰ|ಪೊಲೀಸ್|ನ್ಯಾಯಾಲಯ|ಕಾನೂನು|ಹಕ್ಕು|പോലീസ്|കോടതി|നിയമം|അവകാശം)/i,
+  kisan_mitra: /(kheti|agriculture|kisan|kisaan|farmer|crop|fasal|फसल|khad|khaad|fertilizer|seed|beej|irrigation|sinchai|tractor|weather|mausam|soil|mitti|market\s?price|mandi|bhav|bhaav|agriculture\s?subsidy|krishi|mandee|मंडी|खेत|खेती|tractor|e-?nam|kcc|kisan\s?credit\s?card|msp|minimum\s?support\s?price)/i,
 };
 
 /** Score all agents against a pre-normalised message string. Shared by detectBestAgent and
@@ -168,6 +172,11 @@ const quickActions: Record<AgentKey, { label: string; query: string }[]> = {
     { label: '⚖️ Free legal aid', query: 'default' },
     { label: '🛡️ Consumer rights', query: 'default' },
   ],
+  kisan_mitra: [
+    { label: '🌾 Crop Prices', query: 'mandi' },
+    { label: '🚜 Subsidies', query: 'subsidy' },
+    { label: '🌱 Fertilizer', query: 'khad' },
+  ],
 };
 
 /** Find TrackedItems relevant to a quick-action button click */
@@ -219,12 +228,17 @@ function findRelatedTrackedItems(
 }
 
 export default function AgentChat({ onClose }: { onClose: () => void }) {
-  const { activeAgent, setActiveAgent, setOverlay, chatHistory, addMessage, addTrackedItem, enrichTrackedItem } = useAppStore();
+  const { 
+    activeAgent, setActiveAgent, setOverlay, chatHistory, 
+    addMessage, addTrackedItem, enrichTrackedItem,
+    activeForm, setActiveForm, formData, setFormData
+  } = useAppStore();
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [pendingHandoff, setPendingHandoff] = useState<{ agent: AgentKey; userMsg: string } | null>(null);
+  const [multiAgentCard, setMultiAgentCard] = useState<{ userMsg?: string; consulted: { agent: AgentKey; label: string; confidence: number; reason: string }[] } | null>(null);
   const [trackToast, setTrackToast] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -233,13 +247,14 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const sendMessageRef = useRef<(text: string, demoKey?: string, skipAutoTrack?: boolean, skipAddUserMsg?: boolean) => Promise<void>>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<unknown>(null);
+  const sttSessionRef = useRef<WebSttSession | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  // Holds the id of the auto-tracked item just added, so we can enrich it once the reply arrives
   const pendingTrackId = useRef<string | null>(null);
+  const [isGeneratingForm, setIsGeneratingForm] = useState(false);
 
   const currentAgent = agents.find((a) => a.key === activeAgent) || agents[0];
   const messages = chatHistory[activeAgent];
@@ -254,9 +269,11 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
 
   // Send welcome message on first open if no messages
   useEffect(() => {
+    let welcomeTimer: NodeJS.Timeout;
     if (messages.length === 0) {
       // Language-aware fallback welcome (used only if DEMO_AGENT_RESPONSES has no default)
-      const lang = useAppStore.getState().userProfile.language?.split('-')[0] || 'hi';
+      const userLang = useAppStore.getState().userProfile?.language || 'hi';
+      const lang = userLang.split('-')[0];
       const WELCOME_FALLBACK: Record<string, string> = {
         hi: 'नमस्ते! मैं आपकी कैसे मदद कर सकता हूँ?',
         mr: 'नमस्कार! मी तुम्हाला कशी मदत करू शकतो?',
@@ -277,6 +294,7 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
         yojana_saathi:    `📋 Hello! I'm **Yojana Saathi**, your government schemes guide.\n\nI can help you find and apply for:\n• 🌾 PM-KISAN, MGNREGA, PM-Awas\n• 🏥 Ayushman Bharat card\n• 🛒 Ration card & PDS benefits\n• 🎓 Scholarships & pensions\n• 800+ central & state schemes\n\nTell me about yourself to find eligible schemes!`,
         arthik_salahkar:  `💰 Hello! I'm **Arthik Salahkar**, your financial guide.\n\nI can help with:\n• 🚨 UPI fraud & cyber scam reporting\n• 🏦 Bank account & Jan Dhan issues\n• 💳 MUDRA loan guidance\n• 📱 Digital payment problems\n• 🔐 OTP & phishing protection\n\nWhat financial issue can I assist you with?`,
         vidhi_sahayak:    `⚖️ Hello! I'm **Vidhi Sahayak**, your legal rights assistant.\n\nI can help you with:\n• 🚔 Filing FIR or Zero FIR\n• 🆓 Free legal aid (NALSA)\n• 🛡️ Consumer court complaints\n• 🏡 Land & property disputes\n• 📜 RTI filing & rights violations\n\nWhat legal matter do you need help with?`,
+        kisan_mitra:      `🌾 Hello! I'm **Kisan Mitra**, your agricultural assistant.\n\nI can help you with:\n• 🌱 Guidance on seeds, fertilizers, and crops\n• 🚜 Subsidies for agricultural equipment\n• 🌦️ Weather alerts & Mandi prices\n• 💳 Kisan Credit Card (KCC)\n• 🤝 E-NAM marketplace integration\n\nHow can I help with your farming today?`,
       };
       // Language-first: Hindi → DEMO_AGENT_RESPONSES default; English → agent-specific;
       // other languages → their WELCOME_FALLBACK or Hindi fallback.
@@ -286,7 +304,7 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
           ? (ENGLISH_AGENT_WELCOME[activeAgent] || WELCOME_FALLBACK.en)
           : (WELCOME_FALLBACK[lang] || WELCOME_FALLBACK.hi);
       setIsTyping(true);
-      const timer = setTimeout(() => {
+      welcomeTimer = setTimeout(() => {
         addMessage(activeAgent, {
           id: `welcome-${Date.now()}`,
           role: 'assistant',
@@ -303,15 +321,16 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
           setTimeout(() => sendMessage(voiceText), 500);
         }
       }, 1200);
-      return () => clearTimeout(timer);
+      return () => clearTimeout(welcomeTimer);
     } else {
       // Agent already has messages — still check for pending voice transcript
       const voiceText = useAppStore.getState().lastTranscript;
       if (voiceText) {
         useAppStore.getState().setTranscript('');
-        setTimeout(() => sendMessage(voiceText), 400);
+        welcomeTimer = setTimeout(() => sendMessage(voiceText), 400);
       }
     }
+    return () => clearTimeout(welcomeTimer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAgent]);
 
@@ -325,20 +344,21 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
         setTimeout(() => {
           setInput(message);
           // Auto-send after setting the input
-          setTimeout(() => sendMessage(message), 100);
+          setTimeout(() => sendMessageRef.current?.(message), 100);
         }, 100);
       }
     };
 
     window.addEventListener('inject-chat-message', handleInjectMessage);
     return () => window.removeEventListener('inject-chat-message', handleInjectMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleImageAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      addMessage(activeAgent, { id: `err-${Date.now()}`, role: 'assistant', content: '⚠️ Image must be under 5 MB. Please choose a smaller photo.', timestamp: Date.now(), agentKey: activeAgent });
+      addMessage(activeAgent, { id: `err-${Date.now()}`, role: 'system', content: t('errorImageSize') || '⚠️ Image must be under 5 MB. Please choose a smaller photo.', timestamp: Date.now(), agentKey: activeAgent });
       e.target.value = '';
       return;
     }
@@ -465,6 +485,74 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
     setAttachedAnalysis(null);
     setIsTyping(true);
 
+    // Action Form trigger check
+    const FORM_TRIGGER = /\b(file\s?complaint|complain|shikayat\s?darj|apply\s?scheme|scheme\s?form|submit\s?request|register\s?complaint|naya\s?form|apply|loan|kcc)\b/i;
+    // We purposefully ignore generalized "complaint" because it overrides tracking logic without explicit intent.
+    if (FORM_TRIGGER.test(text) && !demoKey && !skipAutoTrack && !skipAddUserMsg) {
+      setIsGeneratingForm(true);
+      setTimeout(() => scrollToBottom(), 100);
+
+      // Async LLM context generation
+      fetch('/api/generate-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text, agentKey: currentAgent, userProfile: useAppStore.getState().userProfile })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.form && data.form.fields) {
+          setActiveForm(data.form);
+          
+          // Pre-fill formData natively based on the userProfile mapping.
+          const initialData: Record<string, string> = {};
+          const profile = useAppStore.getState().userProfile;
+          if (profile) {
+             data.form.fields.forEach((f: { name: string; autofillSource?: string }) => {
+               if (f.autofillSource) {
+                 const fn = f.name.toLowerCase();
+                 if (fn.includes('name')) initialData[f.name] = profile.name;
+                 else if (fn.includes('loc') || fn.includes('addres') || fn.includes('pin') || fn.includes('state')) initialData[f.name] = `${profile.state} (PIN: ${profile.digipin})`;
+                 else if (fn.includes('job') || fn.includes('occ')) initialData[f.name] = profile.occupation;
+                 else if (fn.includes('inc')) initialData[f.name] = profile.income.toString();
+                 else initialData[f.name] = 'Verified Record';
+               }
+             });
+          }
+          setFormData(initialData);
+
+        } else {
+          throw new Error('Invalid schema from LLM');
+        }
+      })
+      .catch(e => {
+        console.warn('LLM contextual form fallback triggered:', e);
+        const fallbackType = currentAgent === 'swasthya_sahayak' ? 'health' : currentAgent === 'yojana_saathi' ? 'scheme' : 'grievance';
+        setActiveForm({
+          type: fallbackType,
+          title: String(t('structuredRequestTitle', 'Structured Request')),
+          fields: [
+            { name: 'name', label: String(t('fullName', 'Full Name')) },
+            { name: 'location', label: String(t('locationAddress', 'Location / Address')) },
+            { name: 'details', label: String(t('caseDetails', 'Case Details')) }
+          ]
+        });
+      })
+      .finally(() => {
+        setIsGeneratingForm(false);
+        setTimeout(() => scrollToBottom(), 100);
+      });
+
+      addMessage(currentAgent, {
+        id: `sys-form-${Date.now()}`,
+        role: 'system',
+        content: String(t('generatingFormMsg', `📝 **Generating Request Form...**\n\nI am dynamically creating a context-specific form for your issue. Please fill it out securely below.`)),
+        timestamp: Date.now(),
+        agentKey: currentAgent,
+      });
+      setIsTyping(false);
+      return;
+    }
+
     // Auto-track complaints / health / legal into Track tab (skip on handoff replays)
     const COMPLAINT_KW = /\b(pothole|gadha|sadak|street\s?light|paani|pani|water|sewage|nala|nalaa|kachra|garbage|bijli|safai|complaint|shikayat|FIR|zero\s?fir|court|vakil|vakeel|hospital|doctor|beemar|ambulance|108|1930|PM-?KISAN|kisan|yojana|pension|ration|scholarship|chhatravritti|ayushman|pmjay|mgnrega|narega|subsidy|scheme|UPI|fraud|scam|loan)\b/i;
     if (!skipAutoTrack && COMPLAINT_KW.test(text)) {
@@ -495,29 +583,41 @@ export default function AgentChat({ onClose }: { onClose: () => void }) {
     // Check if user's message belongs to a different agent
     const bestAgent = detectBestAgent(text, currentAgent);
     if (bestAgent && !demoKey && !skipAddUserMsg) {
-      const targetInfo = agents.find((a) => a.key === bestAgent)!;
-      const currentInfo = agents.find((a) => a.key === currentAgent)!;
+      const targetInfo = agents.find((a) => a.key === bestAgent);
+      const currentInfo = agents.find((a) => a.key === currentAgent);
 
-      const redirectMsg = `🔁 **Better Agent · सही एजेंट**
+      if (!targetInfo || !currentInfo) {
+        console.warn('[AgentChat] Unable to resolve agent metadata for handoff:', { bestAgent, currentAgent });
+      } else {
 
-Your question is best handled by **${targetInfo.name}** · आपका सवाल **${targetInfo.nameHi}** से जुड़ा है।
+        const specializations: Record<string, string> = {
+          'Nagarik Mitra': 'civic services & grievances',
+          'Swasthya Sahayak': 'health & medical assistance',
+          'Yojana Saathi': 'government schemes & welfare',
+          'Arthik Salahkar': 'finance & banking',
+          'Vidhi Sahayak': 'legal aid & rights',
+          'Kisan Mitra': 'agriculture & farming',
+        };
 
-I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik Mitra' ? 'civic services · नागरिक सेवाएं' : currentInfo.name === 'Swasthya Sahayak' ? 'health · स्वास्थ्य' : currentInfo.name === 'Yojana Saathi' ? 'gov. schemes · सरकारी योजनाएं' : currentInfo.name === 'Arthik Salahkar' ? 'finance · वित्त' : 'legal help · कानूनी सहायता'}.
+        const baseRedirect = String(t('betterAgentMsg', `🔁 **Better Agent for You**\n\nYour question is best handled by **{target}**.\n\nI am **{current}** — I specialise in {specialization}.\n\n👇 Tap below to connect:`));
+        const redirectMsg = baseRedirect
+          .replace('{target}', targetInfo.name)
+          .replace('{current}', currentInfo.name)
+          .replace('{specialization}', specializations[currentInfo.name] || 'general queries');
 
-👇 Tap below to connect · नीचे tap करें:`;
-
-      setTimeout(() => {
-        addMessage(currentAgent, {
-          id: `redirect-${Date.now()}`,
-          role: 'assistant',
-          content: redirectMsg,
-          timestamp: Date.now(),
-          agentKey: currentAgent,
-        });
-        setPendingHandoff({ agent: bestAgent, userMsg: text });
-        setIsTyping(false);
-      }, 1200);
-      return;
+        setTimeout(() => {
+          addMessage(currentAgent, {
+            id: `redirect-${Date.now()}`,
+            role: 'system',
+            content: redirectMsg,
+            timestamp: Date.now(),
+            agentKey: currentAgent,
+          });
+          setPendingHandoff({ agent: bestAgent, userMsg: text });
+          setIsTyping(false);
+        }, 1200);
+        return;
+      }
     }
 
     // Detect which agent client-side keywords point to (even if same as current agent).
@@ -547,8 +647,8 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
         if (!safetyData.safe) {
           addMessage(currentAgent, {
             id: `safety-${Date.now()}`,
-            role: 'assistant',
-            content: '⚠️ आपका संदेश सुरक्षा जाँच में विफल रहा। कृपया संदेश संशोधित करें।\n\n⚠️ Your message was flagged by our safety check. Please revise and resend.',
+            role: 'system',
+            content: t('errorSafetyFailure') || '⚠️ आपका संदेश सुरक्षा जाँच में विफल रहा। कृपया संदेश संशोधित करें。\n\n⚠️ Your message was flagged by our safety check. Please revise and resend.',
             timestamp: Date.now(),
             agentKey: currentAgent,
           });
@@ -586,6 +686,16 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
       }
     }
 
+    // Collect last N messages across ALL agents except the current one to form "Shared Context"
+    const sharedContext = Object.entries(freshHistory)
+      .filter(([agentKey]) => agentKey !== currentAgent)
+      .flatMap(([agentKey, msgs]) => msgs.map(m => ({ ...m, agentKey })))
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-8) // Keep last 8 cross-agent interactions to prevent context bloat
+      .map(m => `[${agents.find(a => a.key === m.agentKey)?.name || m.agentKey}] ${m.role === 'user' ? 'Citizen' : 'Agent'}: ${m.content}`)
+      .join('\n');
+
     // Try real API first, then fallback to demo
     try {
       const res = await fetch('/api/agent', {
@@ -605,6 +715,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
             .filter((m) => !(m.id?.startsWith('welcome-')))
             .slice(-6)
             .map((m) => ({ role: m.role, content: m.content })),
+          sharedContext,
           language: useAppStore.getState().userProfile.language || 'hi',
           digipin: useAppStore.getState().userProfile.digipin || '',
           citizenProfile: useAppStore.getState().citizenProfile,
@@ -630,11 +741,12 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                 timestamp: Date.now(),
                 agentKey: resolvedKey,
               });
+              const baseRouting = String(t('routingToMsg', `🤖 Routing to **{target}** — connecting now...`));
               // Show handoff notification in current chat
               addMessage(currentAgent, {
                 id: `handoff-${Date.now()}`,
                 role: 'system',
-                content: `🤖 Routing to **${targetAgent.name}** · **${targetAgent.nameHi}** सबसे उपयुक्त हैं — connecting now...`,
+                content: baseRouting.replace('{target}', targetAgent.name),
                 timestamp: Date.now(),
               });
               setIsTyping(false);
@@ -660,15 +772,31 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                 pendingTrackId.current = null;
               }
 
+              // ── Multi-Agent Collaboration Detection (Phi-4 AI) ──
+              fetch('/api/intelligence/multi-agent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, currentAgent })
+              }).then(r => r.json()).then(multiResult => {
+                if (multiResult.isMultiAgent && multiResult.consulted?.length > 0) {
+                  setTimeout(() => {
+                    setMultiAgentCard({ consulted: multiResult.consulted, userMsg: text });
+                    // Auto-dismiss after 15 seconds
+                    setTimeout(() => setMultiAgentCard(null), 15000);
+                  }, 1200);
+                }
+              }).catch(e => console.warn('[MULTI-AGENT] detection failed:', e));
+
               // Handle server-side agent handoff suggestion (fallback keyword-based)
               if (data.suggestedAgent && data.suggestedAgent !== currentAgent && !wasRerouted && !skipAddUserMsg) {
                 const sTarget = agents.find((a) => a.key === data.suggestedAgent);
                 if (sTarget) {
+                  const baseAlsoTry = String(t('alsoTryMsg', `🔁 Also try **{target}** — they may be able to help better.`));
                   setTimeout(() => {
                     addMessage(currentAgent, {
                       id: `handoff-${Date.now()}`,
                       role: 'system',
-                      content: `🔁 Also try **${sTarget.name}** · **${sTarget.nameHi}** से भी बात करें?`,
+                      content: baseAlsoTry.replace('{target}', sTarget.name),
                       timestamp: Date.now(),
                     });
                     setPendingHandoff({ agent: data.suggestedAgent as AgentKey, userMsg: text });
@@ -679,9 +807,24 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
           }, 800);
           return;
         }
+      } else {
+        addMessage(currentAgent, {
+          id: `err-${Date.now()}`,
+          role: 'system',
+          content: t('errorApiConnection') || '⚠️ Error connecting to server. Using offline fallback response.',
+          timestamp: Date.now(),
+          agentKey: currentAgent,
+        });
       }
     } catch {
-      // API failed, use demo data
+      // API failed, log to chat silently and use demo data
+        addMessage(currentAgent, {
+          id: `err-${Date.now()}`,
+          role: 'system',
+          content: t('errorApiConnection') || '⚠️ Network issue. Using offline fallback response.',
+          timestamp: Date.now(),
+          agentKey: currentAgent,
+        });
     }
 
     // Demo fallback with realistic typing delay
@@ -714,7 +857,11 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
   const executeHandoff = () => {
     if (!pendingHandoff) return;
     const { agent, userMsg } = pendingHandoff;
-    const target = agents.find((a) => a.key === agent)!;
+    const target = agents.find((a) => a.key === agent);
+    if (!target) {
+      setPendingHandoff(null);
+      return;
+    }
 
     // Add system message in current chat
     addMessage(activeAgent, {
@@ -739,6 +886,51 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
       }, 2000);
     }, 600);
   };
+
+  sendMessageRef.current = sendMessage;
+
+  const handleVoiceToggle = useCallback(async () => {
+    if (isListening) {
+      sttSessionRef.current?.stop();
+      return;
+    }
+
+    try {
+      const lang = useAppStore.getState().userProfile.language || 'hi';
+      const session = await startAzureSttCapture(lang, 7000);
+      sttSessionRef.current = session;
+      setIsListening(true);
+
+      session.done
+        .then((spokenText) => {
+          const text = spokenText.trim();
+          if (!text) return;
+          setInput(text);
+          sendMessage(text);
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : 'Voice capture failed.';
+          if (message !== 'cancelled') {
+            alert(message);
+          }
+        })
+        .finally(() => {
+          sttSessionRef.current = null;
+          setIsListening(false);
+        });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('voiceNotSupportedInBrowser', 'Voice not supported in this browser.');
+      alert(message);
+      setIsListening(false);
+    }
+  }, [isListening, sendMessage, t]);
+
+  useEffect(() => {
+    return () => {
+      sttSessionRef.current?.cancel();
+      sttSessionRef.current = null;
+    };
+  }, []);
 
   const handleQuickAction = (query: string, label: string) => {
     // Strip leading emoji and whitespace
@@ -820,16 +1012,35 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
 
   const renderMessage = (msg: typeof messages[0]) => {
     if (msg.role === 'system') {
-      // Render **bold** in handoff / system messages
-      const parsedSystem = msg.content.split(/(\*\*[^*]+\*\*)/g).map((part, idx) =>
-        part.startsWith('**') && part.endsWith('**')
-          ? <strong key={idx} className="font-semibold text-slate-800 dark:text-white">{part.slice(2, -2)}</strong>
-          : <span key={idx}>{part}</span>
-      );
+      const isCollab = msg.content.includes('Multi-Agent Intelligence');
+      const isHandoff = msg.content.includes('Better Agent') || msg.content.includes('Also try');
+      
+      const containerClass = isCollab 
+        ? "bg-gradient-to-r from-[#8B5CF6]/15 via-[#8B5CF6]/5 to-transparent border-l-[3px] border-[#8B5CF6]"
+        : isHandoff
+        ? "bg-gradient-to-r from-[#FF9933]/15 via-[#FF9933]/5 to-transparent border-l-[3px] border-[#FF9933]"
+        : "bg-slate-100 dark:bg-[#162a4a]/80 border border-slate-300 dark:border-white/10";
+
+      const icon = isCollab ? "psychology" : isHandoff ? "sync_alt" : "info";
+      const iconColor = isCollab ? "text-[#8B5CF6]" : isHandoff ? "text-[#FF9933]" : "text-slate-500";
+      
       return (
-        <div key={msg.id} className="flex justify-center my-2">
-          <div className="bg-slate-100 dark:bg-[#162a4a]/80 border border-slate-300 dark:border-white/10 rounded-full px-4 py-1.5 text-[11px] text-slate-600 dark:text-gray-400">
-            {parsedSystem}
+        <div key={msg.id} className="flex justify-center my-4 mx-3" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+          <div className={`rounded-xl px-4 py-3.5 w-full shadow-sm rounded-l-md ${containerClass}`}>
+            <div className="flex items-start gap-3">
+              <span className={`material-symbols-outlined mt-0.5 ${iconColor} bg-white dark:bg-black/20 rounded-lg p-1 shadow-sm`}>{icon}</span>
+              <div className="flex-1 text-[11.5px] text-slate-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap pt-1">
+                {msg.content.split('\n').map((line, lIdx) => (
+                   <div key={lIdx} className={line.trim() === '' ? 'h-2' : ''}>
+                     {line.split(/(\*\*[^*]+\*\*|_[^_]+_)/g).map((part, idx) => {
+                       if (part.startsWith('**') && part.endsWith('**')) return <strong key={idx} className="text-slate-900 dark:text-white font-bold">{part.slice(2, -2)}</strong>;
+                       if (part.startsWith('_') && part.endsWith('_')) return <span key={idx} className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-slate-600 dark:text-gray-400 font-medium">{part.slice(1, -1)}</span>;
+                       return <span key={idx}>{part}</span>;
+                     })}
+                   </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -855,7 +1066,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
         >
           <div>
             {isUser && msg.imageUrl && (
-              <img src={msg.imageUrl} alt="Attached" className="max-w-full rounded-xl mb-2 max-h-40 object-cover" />
+              <Image src={msg.imageUrl} alt="Attached" width={320} height={160} unoptimized className="max-w-full rounded-xl mb-2 max-h-40 object-cover h-auto" />
             )}
             {isUser ? (msg.imageUrl && !msg.content.startsWith('📷') ? msg.content || null : (msg.content === '📷 Image sent' ? null : msg.content)) : (
               <RichChatCard
@@ -943,7 +1154,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
         </button>
         <button onClick={() => { 
           if (messages.length > 0) setShowClearConfirm(true);
-        }} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10" title="Clear chat">
+        }} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10" title={t('clearChat', 'Clear chat')}>
           <span className="material-symbols-outlined text-gray-600 dark:text-gray-400 text-xl">delete_sweep</span>
         </button>
         <button 
@@ -957,7 +1168,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
             }
           }} 
           className={`p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 ${ttsEnabled ? 'bg-green-100 dark:bg-green-900/30' : ''}`} 
-          title={ttsEnabled ? 'TTS Enabled' : 'Enable TTS'}
+          title={ttsEnabled ? t('ttsEnabled', 'TTS Enabled') : t('enableTts', 'Enable TTS')}
         >
           <span className={`material-symbols-outlined text-xl ${
             isSpeaking ? 'animate-pulse text-green-600 dark:text-green-400' :
@@ -970,15 +1181,15 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
         <GoiBadge className="mr-0.5" />
         {showClearConfirm && (
           <div className="absolute top-14 right-4 z-50 bg-white dark:bg-[#1a0a3a] border border-slate-300 dark:border-white/10 rounded-xl p-3 shadow-2xl flex flex-col gap-2 min-w-[160px]">
-            <p className="text-xs text-slate-700 dark:text-gray-300">Clear chat history?</p>
+            <p className="text-xs text-slate-700 dark:text-gray-300">{t('clearChatHistoryPrompt', 'Clear chat history?')}</p>
             <div className="flex gap-2">
               <button onClick={() => setShowClearConfirm(false)}
                 className="flex-1 py-1 text-xs rounded-lg bg-slate-200 dark:bg-white/5 text-slate-700 dark:text-gray-300 hover:bg-slate-300 dark:hover:bg-white/10">
-                Cancel
+                {t('cancel', 'Cancel')}
               </button>
               <button onClick={() => { const { clearChat } = useAppStore.getState(); clearChat(activeAgent); setShowClearConfirm(false); }}
                 className="flex-1 py-1 text-xs rounded-lg bg-red-600/80 text-white hover:bg-red-600">
-                Clear
+                {t('clear', 'Clear')}
               </button>
             </div>
           </div>
@@ -1051,9 +1262,88 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {messages.map(renderMessage)}
 
+        {/* Multi-Agent Collaboration Card */}
+        {multiAgentCard && !isTyping && (
+          <div className="my-3 rounded-2xl overflow-hidden border border-[#8B5CF6]/25 shadow-lg shadow-[#8B5CF6]/5" style={{ animation: 'fadeIn 0.4s ease-out' }}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#8B5CF6]/20 via-[#6366F1]/15 to-[#3B82F6]/20 px-4 py-3 flex items-center gap-2.5 border-b border-[#8B5CF6]/15">
+              <div className="w-8 h-8 rounded-full bg-[#8B5CF6]/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[#8B5CF6] text-lg">psychology</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-wider">{t('multiAgentIntelligence', 'Multi-Agent Intelligence')}</h4>
+                <p className="text-[9px] text-slate-500 dark:text-gray-400">{t('crossDomainAnalysisDetected', 'Cross-domain analysis detected')}</p>
+              </div>
+              <button onClick={() => setMultiAgentCard(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300">
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+
+            {/* Agent Rows */}
+            <div className="bg-white/80 dark:bg-white/[0.03] divide-y divide-black/5 dark:divide-white/5">
+              {multiAgentCard.consulted.map((c, i) => {
+                const agentInfo = agents.find(a => a.key === c.agent);
+                const color = agentInfo?.color || '#8B5CF6';
+                const icon = agentInfo?.icon || 'smart_toy';
+                return (
+                  <button 
+                    key={i} 
+                    onClick={() => { 
+                      switchAgent(c.agent); 
+                      if (multiAgentCard.userMsg) {
+                        addMessage(c.agent, {
+                          id: `sys-${Date.now()}`,
+                          role: 'system',
+                          content: `✅ ${t('connectedFrom', 'Connected from')} ${agents.find(a => a.key === activeAgent)?.name || activeAgent}. ${t('howCanIHelp', 'How can I help?')}`,
+                          timestamp: Date.now(),
+                        });
+                        setTimeout(() => {
+                          if (multiAgentCard.userMsg) {
+                            sendMessage(multiAgentCard.userMsg, undefined, true, true);
+                          }
+                        }, 500);
+                      }
+                      setMultiAgentCard(null); 
+                    }}
+                    className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer" 
+                    style={{ animation: `fadeIn 0.3s ease-out ${i * 0.15}s both` }}
+                  >
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: color + '18' }}>
+                      <span className="material-symbols-outlined text-[18px]" style={{ color }}>{icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] font-bold text-slate-900 dark:text-white">{c.label}</span>
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full" style={{ color, backgroundColor: color + '15' }}>{c.confidence}%</span>
+                      </div>
+                      {/* Confidence bar */}
+                      <div className="h-1 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${c.confidence}%`, backgroundColor: color }} />
+                      </div>
+                      {/* Matched keywords */}
+                      <div className="flex flex-wrap gap-1">
+                        {c.reason.replace('Matched: ', '').split(', ').map((kw, j) => (
+                          <span key={j} className="text-[8px] px-1.5 py-0.5 rounded-full border font-medium" style={{ color, borderColor: color + '30', backgroundColor: color + '08' }}>{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer tip */}
+            <div className="bg-[#8B5CF6]/5 px-4 py-2 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#8B5CF6] text-xs">lightbulb</span>
+              <span className="text-[9px] text-slate-500 dark:text-gray-400">{t('tapAgentToSwitchHelp', 'Tap an agent above to switch and get specialized assistance')}</span>
+            </div>
+          </div>
+        )}
+
         {/* Handoff Button */}
         {pendingHandoff && !isTyping && (() => {
-          const target = agents.find((a) => a.key === pendingHandoff.agent)!;
+          const target = agents.find((a) => a.key === pendingHandoff.agent);
+          if (!target) return null;
           return (
             <div className="flex flex-col items-center gap-2 my-3">
               <button
@@ -1067,7 +1357,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                   <span className="material-symbols-outlined text-base">{target.icon}</span>
                 </div>
                 <div className="text-left">
-                  <div className="text-xs font-bold text-slate-800 dark:text-white">{target.nameHi} से बात करें</div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-white">Talk to {target.name}</div>
                   <div className="text-[10px] text-slate-600 dark:text-gray-400">Tap to switch → {target.name}</div>
                 </div>
                 <span className="material-symbols-outlined text-[#FF9933] ml-1">arrow_forward</span>
@@ -1079,7 +1369,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                   addMessage(activeAgent, {
                     id: `stay-${Date.now()}`,
                     role: 'system',
-                    content: `✅ ${currentAgent.nameHi} के साथ बातचीत जारी है`,
+                    content: `✅ Continuing with ${currentAgent.name}`,
                     timestamp: Date.now(),
                   });
                   // Get current agent's answer to the original query (don't re-add user msg)
@@ -1087,7 +1377,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
                 }}
                 className="text-[10px] text-slate-600 dark:text-gray-500 hover:text-slate-800 dark:hover:text-gray-300 transition-colors"
               >
-                यहीं रहें • Stay with {currentAgent.name}
+                Stay with {currentAgent.name}
               </button>
             </div>
           );
@@ -1110,6 +1400,127 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
             </div>
           </div>
         )}
+
+        {/* Form Loading Shimmer */}
+        {isGeneratingForm && (
+          <div className="bg-slate-50 dark:bg-[#162a4a] border border-[#FF9933]/40 p-4 rounded-xl mb-3 shadow-md mx-2 animate-pulse">
+            <div className="h-4 bg-slate-200 dark:bg-white/10 rounded w-1/2 mb-4"></div>
+            <div className="space-y-3">
+              <div>
+                <div className="h-2 bg-slate-200 dark:bg-white/10 rounded w-1/4 mb-1"></div>
+                <div className="h-8 bg-white dark:bg-[#0f1f3a] rounded-lg"></div>
+              </div>
+              <div>
+                <div className="h-2 bg-slate-200 dark:bg-white/10 rounded w-1/3 mb-1"></div>
+                <div className="h-8 bg-white dark:bg-[#0f1f3a] rounded-lg"></div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <div className="h-8 flex-1 bg-slate-200 dark:bg-white/10 rounded-lg"></div>
+              <div className="h-8 flex-1 bg-slate-300 dark:bg-white/20 rounded-lg"></div>
+            </div>
+          </div>
+        )}
+
+        {/* Action Form Card */}
+        {activeForm && (
+          <div className="bg-white/80 dark:bg-[#0f1f3a]/80 backdrop-blur-xl border border-[#FF9933]/50 p-5 rounded-2xl mb-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[#FF9933]/10 mx-2 animate-in slide-in-from-bottom-2">
+            <h3 className="font-bold text-base text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#FF9933] text-xl">edit_document</span>
+              {activeForm.title}
+            </h3>
+            
+            <div className="space-y-4 mb-5">
+              {activeForm.fields.map(f => (
+                <div key={f.name} className="relative">
+                  <div className="flex justify-between items-end mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-gray-300">{f.label}</label>
+                    {f.autofillSource && (
+                      <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                        <span className="material-symbols-outlined text-[10px]">verified</span>
+                        {f.autofillSource}
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="text"
+                    readOnly={!!f.autofillSource} 
+                    value={formData[f.name] || ''}
+                    onChange={e => setFormData({ ...formData, [f.name]: e.target.value })}
+                    className={`w-full bg-slate-50 dark:bg-[#162a4a] border ${f.autofillSource ? 'border-emerald-500/30 text-emerald-900 dark:text-emerald-100 placeholder:text-emerald-700/50' : 'border-slate-200 dark:border-white/10 text-slate-800 dark:text-white'} rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-[#FF9933]/60 transition-all ${f.autofillSource ? 'opacity-90' : ''}`}
+                    placeholder={f.autofillSource ? t('securelyAutoFilled', 'Securely auto-filled') : t('enterSpecificDetails', 'Enter specific details...')}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {activeForm.documents && activeForm.documents.length > 0 && (
+              <div className="mb-5 bg-[#FF9933]/5 dark:bg-[#FF9933]/10 border border-[#FF9933]/20 rounded-xl p-3.5">
+                <h4 className="text-[11px] font-bold text-slate-800 dark:text-white flex items-center gap-1.5 mb-2">
+                  <span className="material-symbols-outlined text-[14px] text-[#138808]">inventory_2</span>
+                  {t('requiredDocuments', 'Required Documents')}
+                </h4>
+                <ul className="space-y-1.5">
+                  {activeForm.documents.map((doc, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-gray-300 font-medium">
+                      <span className="material-symbols-outlined text-[14px] text-slate-400 mt-0.5">check_circle</span>
+                      {doc}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { setActiveForm(null); setFormData({}); }} 
+                className="flex-1 py-2.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all"
+              >
+                {t('cancel', 'Cancel')}
+              </button>
+              <button 
+                onClick={() => {
+                  const trackId = `BS-${Math.floor(10000 + Math.random() * 90000)}`;
+                  const typeToEmoji: Record<string, string> = { grievance: '📋', health: '🏥', legal: '⚖️', scheme: '📜', finance: '💳' };
+                  
+                  // Auto track
+                  addTrackedItem({
+                    id: `form-${Date.now()}`,
+                    type: (['grievance', 'scheme', 'health', 'legal', 'finance'].includes(activeForm.type)
+                      ? activeForm.type
+                      : 'grievance') as TrackedItem['type'],
+                    title: formData.details ? (formData.details.length > 30 ? formData.details.slice(0, 30) + '...' : formData.details) : activeForm.title,
+                    description: `Submitted by ${formData.name || 'Citizen'} • Location: ${formData.location || 'Unknown'}`,
+                    status: 'Active',
+                    createdAt: Date.now(),
+                    agentKey: activeAgent,
+                    refId: trackId,
+                    emoji: typeToEmoji[activeForm.type] || '📌',
+                  });
+
+                  // Inject success message directly to chat
+                  addMessage(activeAgent, {
+                    id: `sys-success-${Date.now()}`,
+                    role: 'assistant',
+                    content: `✅ **Success!**\n\nYour ${activeForm.title.toLowerCase()} has been securely submitted to the respective department.\n\n**Reference ID:** \`${trackId}\`\n\nYou will receive updates via SMS, and you can track real-time progress in the **Track** tab.`,
+                    timestamp: Date.now(),
+                    agentKey: activeAgent,
+                  });
+
+                  setActiveForm(null);
+                  setFormData({});
+                  setTrackToast(String(t('formSubmittedSecurely', 'Form submitted securely')));
+                  setTimeout(() => setTrackToast(null), 3000);
+                }} 
+                disabled={!formData.details || formData.details.length < 3}
+                className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-[#FF9933] to-[#E68A2E] text-white disabled:opacity-50"
+              >
+                {t('submitSecurely', 'Submit Securely')}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -1133,17 +1544,17 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
         {/* Image preview strip */}
         {attachedPreview && (
           <div className="flex items-center gap-2 mb-2 bg-slate-50 dark:bg-[#162a4a] border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2">
-            <img src={attachedPreview} alt="Preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+            <Image src={attachedPreview} alt="Preview" width={48} height={48} unoptimized className="w-12 h-12 rounded-lg object-cover shrink-0" />
             <div className="flex-1 min-w-0">
               {isAnalyzing ? (
                 <p className="text-[11px] text-blue-400 flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm animate-spin">sync</span>
-                  Analyzing with Azure Vision...
+                  {t('analyzingWithAzureVision', 'Analyzing with Azure Vision...')}
                 </p>
               ) : attachedAnalysis ? (
                 <p className="text-[11px] text-green-600 dark:text-green-400 truncate">✓ {attachedAnalysis.slice(0, 60)}{attachedAnalysis.length > 60 ? '…' : ''}</p>
               ) : (
-                <p className="text-[11px] text-slate-600 dark:text-gray-400">Image ready to send</p>
+                <p className="text-[11px] text-slate-600 dark:text-gray-400">{t('imageReadyToSend', 'Image ready to send')}</p>
               )}
             </div>
             <button onClick={() => { setAttachedPreview(null); setAttachedAnalysis(null); }} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg">
@@ -1159,7 +1570,7 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
-              placeholder={isListening ? '🎙️ Listening...' : t('chatPlaceholder')}
+              placeholder={isListening ? t('listening', '🎙️ Listening...') : t('chatPlaceholder')}
               className="flex-1 bg-transparent text-sm text-slate-800 dark:text-white placeholder:text-slate-500 dark:placeholder:text-gray-500 outline-none"
               disabled={isTyping}
             />
@@ -1168,62 +1579,15 @@ I am **${currentInfo.name}** — I specialise in ${currentInfo.name === 'Nagarik
               onClick={() => imageInputRef.current?.click()}
               disabled={isTyping || isAnalyzing}
               className="ml-1 p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 transition-all disabled:opacity-40"
-              title="Attach image for Vision analysis"
+              title={t('attachImageForVisionAnalysis', 'Attach image for Vision analysis')}
             >
               <span className="material-symbols-outlined text-slate-600 dark:text-gray-400 text-xl">attach_file</span>
             </button>
-            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageAttach} aria-label="Attach image" />
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageAttach} aria-label={t('attachImage', 'Attach image')} />
           </div>
           {/* Voice mic button */}
           <button
-            onClick={() => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const win = window as any;
-              const SRClass = win.SpeechRecognition || win.webkitSpeechRecognition;
-              if (!SRClass) { alert('Voice not supported in this browser.'); return; }
-              if (isListening) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (recognitionRef.current as any)?.stop();
-                setIsListening(false);
-                return;
-              }
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const rec: any = new SRClass();
-              recognitionRef.current = rec;
-              const lang = useAppStore.getState().userProfile.language || 'hi';
-              rec.lang = lang.includes('-') ? lang : `${lang}-IN`;
-              rec.interimResults = false;
-              rec.maxAlternatives = 1;
-              setIsListening(true);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              rec.onresult = (event: any) => {
-                const transcript: string = event.results[0][0].transcript;
-                setInput((prev) => (prev ? prev + ' ' + transcript : transcript));
-                setIsListening(false);
-              };
-              rec.onerror = (e: any) => {
-                if (e?.error === 'language-not-supported') {
-                  // Browser doesn't support this language — retry with hi-IN fallback
-                  const fallback: any = new SRClass();
-                  recognitionRef.current = fallback;
-                  fallback.lang = 'hi-IN';
-                  fallback.interimResults = false;
-                  fallback.maxAlternatives = 1;
-                  fallback.onresult = (ev: any) => {
-                    const t2: string = ev.results[0][0].transcript;
-                    setInput((prev: string) => (prev ? prev + ' ' + t2 : t2));
-                    setIsListening(false);
-                  };
-                  fallback.onerror = () => setIsListening(false);
-                  fallback.onend = () => setIsListening(false);
-                  fallback.start();
-                } else {
-                  setIsListening(false);
-                }
-              };
-              rec.onend = () => setIsListening(false);
-              rec.start();
-            }}
+            onClick={handleVoiceToggle}
             className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all active:scale-95 ${
               isListening
                 ? 'bg-red-500/20 border-red-500/50 animate-pulse'

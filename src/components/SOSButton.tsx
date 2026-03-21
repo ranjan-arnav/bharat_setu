@@ -20,6 +20,7 @@ import React, {
 import { useAppStore } from '@/lib/store';
 import { useTranslation } from '@/lib/i18n/useTranslation';
 import { captureLocation, encodeDigipin, generateOfflineSmsLink, SOSLocation, ResponderType } from '@/lib/sos-engine';
+import { startAzureSttCapture, type WebSttSession } from '@/lib/web-stt';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -153,11 +154,9 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
   const [listenCountdown, setListenCountdown] = useState(5);
   const [detectedSpeech, setDetectedSpeech] = useState<string | null>(null);
   const [voiceResult, setVoiceResult] = useState<'detecting' | 'triggered' | 'safe' | null>(null);
-  const recognitionRef = useRef<unknown>(null);
+  const voiceCaptureSessionRef = useRef<WebSttSession | null>(null);
   const listenTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const listenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdRaf = useRef<number | null>(null);
   const holdStart = useRef<number>(0);
   const sosStart = useRef<number>(0);
@@ -167,7 +166,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
   const retryCount = useRef(0);
   const triggerSOSRef = useRef<(() => void) | null>(null);
   const trackingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const offlineQueue = useRef<any[]>([]);
+  const offlineQueue = useRef<SOSLocation[]>([]);
   const isMounted = useRef(true);
 
   // ── Safety Timer State ──────────────────────────────────────────────────────
@@ -178,16 +177,13 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
-      if (holdTimer.current) clearTimeout(holdTimer.current);
       if (holdRaf.current) cancelAnimationFrame(holdRaf.current);
       if (elapsedTimer.current) clearInterval(elapsedTimer.current);
       if (poller.current) clearInterval(poller.current);
       if (trackingInterval.current) clearInterval(trackingInterval.current);
       if (retryTimer.current) clearTimeout(retryTimer.current);
       if (listenTimerRef.current) clearInterval(listenTimerRef.current);
-      if (listenTimeoutRef.current) clearTimeout(listenTimeoutRef.current);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      try { (recognitionRef.current as any)?.stop(); } catch { /* noop */ }
+      voiceCaptureSessionRef.current?.stop();
     };
   }, []);
 
@@ -234,7 +230,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
           });
           offlineQueue.current = [];
           console.log('[SOS Tracking] Flushed offline location queue.');
-        } catch (e) { /* keep in queue */ }
+        } catch { /* keep in queue */ }
       }
     };
     window.addEventListener('online', handleOnline);
@@ -267,7 +263,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
           // Store in offline queue
           offlineQueue.current.push(loc);
         }
-      } catch (e) { /* ignore tracking errors */ }
+      } catch { /* ignore tracking errors */ }
     }, 10000);
 
     return () => { if (trackingInterval.current) clearInterval(trackingInterval.current); };
@@ -303,7 +299,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
   }, [phase, eventId]);
 
   // ── Voice Detection — start 5s listening ──────────────────────────────────
-  const startVoiceListen = useCallback(() => {
+  const startVoiceListen = useCallback(async () => {
     setPhase('listening');
     setListenCountdown(5);
     setDetectedSpeech(null);
@@ -319,53 +315,25 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
       }
     }, 1000);
 
-    // Start speech recognition
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const win = window as any;
-    const SRClass = win.SpeechRecognition || win.webkitSpeechRecognition;
-    if (SRClass) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rec: any = new SRClass();
-      recognitionRef.current = rec;
-      const lang = userProfile.language || 'hi';
-      rec.lang = lang.includes('-') ? lang : `${lang}-IN`;
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.maxAlternatives = 3;
+    try {
+      const lang = userProfile.language || 'hi-IN';
+      const language = lang.includes('-') ? lang : `${lang}-IN`;
+      const captureSession = await startAzureSttCapture(language, 5000);
+      voiceCaptureSessionRef.current = captureSession;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rec.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript + ' ';
-        }
-        transcript = transcript.toLowerCase().trim();
-        if (isMounted.current) setDetectedSpeech(transcript);
+      const transcriptRaw = await captureSession.done;
+      if (!isMounted.current) return;
 
-        // Check for SOS keywords
-        const found = SOS_KEYWORDS.some(kw => transcript.includes(kw.toLowerCase()));
-        if (found && isMounted.current) {
-          setVoiceResult('triggered');
-          try { rec.stop(); } catch { /* noop */ }
-          if (listenTimerRef.current) clearInterval(listenTimerRef.current);
-          if (listenTimeoutRef.current) clearTimeout(listenTimeoutRef.current);
-          // Auto-trigger SOS after brief visual confirmation
-          setTimeout(() => {
-            if (isMounted.current) triggerSOSRef.current?.();
-          }, 800);
-        }
-      };
+      const transcript = transcriptRaw.toLowerCase().trim();
+      setDetectedSpeech(transcript || null);
 
-      rec.onerror = () => { /* ignore — timeout will handle */ };
-      try { rec.start(); } catch { /* noop */ }
-    }
-
-    // 5 second timeout — if no keyword detected, return to idle
-    listenTimeoutRef.current = setTimeout(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      try { (recognitionRef.current as any)?.stop(); } catch { /* noop */ }
-      if (listenTimerRef.current) clearInterval(listenTimerRef.current);
-      if (isMounted.current) {
+      const found = transcript ? SOS_KEYWORDS.some(kw => transcript.includes(kw.toLowerCase())) : false;
+      if (found) {
+        setVoiceResult('triggered');
+        setTimeout(() => {
+          if (isMounted.current) triggerSOSRef.current?.();
+        }, 800);
+      } else {
         setVoiceResult('safe');
         setTimeout(() => {
           if (isMounted.current) {
@@ -375,7 +343,20 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
           }
         }, 1500);
       }
-    }, 5000);
+    } catch {
+      if (!isMounted.current) return;
+      setVoiceResult('safe');
+      setTimeout(() => {
+        if (isMounted.current) {
+          setPhase('idle');
+          setVoiceResult(null);
+          setDetectedSpeech(null);
+        }
+      }, 1500);
+    } finally {
+      voiceCaptureSessionRef.current = null;
+      if (listenTimerRef.current) clearInterval(listenTimerRef.current);
+    }
   }, [userProfile.language]);
 
   // ── Hold-press handlers ────────────────────────────────────────────────────
@@ -502,7 +483,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
         }
       }
 
-    } catch (err) {
+    } catch {
       if (!isMounted.current) return;
       // Bug fix: limit retries to 1 to prevent an infinite retry loop on
       // persistent network failure.
@@ -549,7 +530,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
           body: JSON.stringify({ eventId }),
           headers: { 'Content-Type': 'application/json' },
         });
-      } catch (e) { /* silently fail session end on network drops */ }
+      } catch { /* silently fail session end on network drops */ }
     }
     setPhase('safe');
   };
@@ -618,10 +599,8 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
         {voiceResult === 'detecting' && (
           <button
             onClick={() => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              try { (recognitionRef.current as any)?.stop(); } catch { /* noop */ }
+              voiceCaptureSessionRef.current?.stop();
               if (listenTimerRef.current) clearInterval(listenTimerRef.current);
-              if (listenTimeoutRef.current) clearTimeout(listenTimeoutRef.current);
               setPhase('idle');
               setVoiceResult(null);
               setDetectedSpeech(null);
@@ -636,10 +615,8 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
         {voiceResult === 'detecting' && (
           <button
             onClick={() => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              try { (recognitionRef.current as any)?.stop(); } catch { /* noop */ }
+              voiceCaptureSessionRef.current?.stop();
               if (listenTimerRef.current) clearInterval(listenTimerRef.current);
-              if (listenTimeoutRef.current) clearTimeout(listenTimeoutRef.current);
               triggerSOSRef.current?.();
             }}
             className="w-full max-w-xs bg-red-600 hover:bg-red-500 text-slate-900 dark:text-white font-bold py-4 rounded-xl transition-all uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(239,68,68,0.6)]"
@@ -705,7 +682,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
         <div className="size-24 rounded-full bg-green-600 flex items-center justify-center shadow-[0_0_40px_rgba(22,163,74,0.6)]">
           <span className="material-symbols-outlined text-5xl">check</span>
         </div>
-        <h2 className="text-3xl font-black text-green-400 tracking-wider">You're Safe</h2>
+        <h2 className="text-3xl font-black text-green-400 tracking-wider">You&apos;re Safe</h2>
         <p className="text-slate-400 text-center text-sm max-w-xs">
           All responders have been notified that you are safe.{' '}
           {eventId && <span className="text-slate-500 text-xs block mt-1">Ref: {eventId}</span>}
@@ -839,7 +816,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
             {hasWomenSafety && (
               <a href="tel:1091"
                 className="flex items-center justify-center gap-2 h-12 bg-pink-700/80 hover:bg-pink-700 rounded-xl font-bold text-sm text-slate-900 dark:text-white col-span-2">
-                <span className="material-symbols-outlined text-base">woman</span>Women's Helpline 1091
+                <span className="material-symbols-outlined text-base">woman</span>Women&apos;s Helpline 1091
               </a>
             )}
           </div>
@@ -862,7 +839,7 @@ export default function SOSButton({ onClose }: SOSButtonProps) {
             onClick={markSafe}
             className="flex-[2] bg-green-600 hover:bg-green-500 text-slate-900 dark:text-white font-black py-4 rounded-xl uppercase tracking-widest text-base shadow-[0_0_20px_rgba(22,163,74,0.4)]"
           >
-            I'm Safe
+            I&apos;m Safe
           </button>
         </div>
       </div>
