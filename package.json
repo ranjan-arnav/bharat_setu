@@ -24,6 +24,7 @@
     "@azure/storage-queue": "^12.28.0",
     "@fontsource/material-symbols-outlined": "^5.2.38",
     "@mistralai/mistralai": "^1.14.1",
+    "applicationinsights": "^3.14.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",
     "html2canvas": "^1.4.1",
