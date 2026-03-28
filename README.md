@@ -63,13 +63,13 @@ flowchart LR
   end
 
   subgraph ApiLayer[Next.js API Route Layer]
-    A1[/api/agent]
-    A2[/api/backend/*]
-    A3[/api/sos/*]
-    A4[/api/call/*]
-    A5[/api/uploads/*]
-    A6[/api/kisan/*]
-    A7[/api/ml/*]
+    A1["/api/agent"]
+    A2["/api/backend/*"]
+    A3["/api/sos/*"]
+    A4["/api/call/*"]
+    A5["/api/uploads/*"]
+    A6["/api/kisan/*"]
+    A7["/api/ml/*"]
   end
 
   subgraph BackendDomain[Domain Services]
@@ -182,14 +182,14 @@ flowchart TD
   U1[UI action in component]
   S1[Zustand store action]
   P1[postJson best-effort fire-and-forget]
-  R1[/api/backend/* routes]
+  R1["/api/backend/* routes"]
   SV[BACKEND domain services]
   CX[(Cosmos containers)]
 
   U2[File upload request]
-  R2[/api/uploads/sas]
+  R2["/api/uploads/sas"]
   B1[(Azure Blob)]
-  R3[/api/uploads/finalize]
+  R3["/api/uploads/finalize"]
   Q1[(Azure Storage Queue)]
   W1[Azure Functions workers]
 
