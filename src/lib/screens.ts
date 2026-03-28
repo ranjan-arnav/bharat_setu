@@ -1,6 +1,6 @@
 // Map of all Stitch screens
 export const SCREENS = {
-  home: { file: '/screens/home.html?v=4', label: 'Home', icon: 'home', tab: 'home' },
+  home: { file: '/screens/home.html?v=5', label: 'Home', icon: 'home', tab: 'home' },
   voice: { file: '/screens/voice.html', label: 'Voice', icon: 'mic', tab: 'voice' },
   civic: { file: '/screens/civic.html', label: 'Nagarik Mitra', icon: 'account_balance', tab: 'services' },
   health: { file: '/screens/health.html', label: 'Swasthya Sahayak', icon: 'health_and_safety', tab: 'services' },

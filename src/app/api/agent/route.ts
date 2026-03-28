@@ -311,7 +311,7 @@ function hasLegalSignal(value: string): boolean {
 }
 
 function hasHealthSignal(value: string): boolean {
-  return /(sick|unwell|feeling\s+(bad|well|good|unwell|weird|strange|off|ill)|doctor|hospital|medicine|pain|fever|cough|ill|vaccination|ayushman|abha|symptom|health|clinic|nurse)/i.test(
+  return /(sick|unwell|feeling\s+(bad|well|good|unwell|weird|strange|off|ill)|doctor|hospital|medicine|pain|fever|cough|ill|vaccination|ayushman|abha|symptom|health|clinic|nurse|bleed|bleeding|blood|wound|injur|hurt|emergency|ambulance|cut|trauma)/i.test(
     value
   );
 }
@@ -2091,7 +2091,12 @@ export async function POST(request: NextRequest) {
         // MULTI-INTENT RESILIENCE: 
         // If RAG failed but the user is also talking about a help/conversational concern (like "not feeling well")
         // do NOT return the fallback. Instead, proceed to LLM for a unified empathetic response.
-        const isConversational = hasHealthSignal(routingText || message); 
+        const isConversational =
+          hasHealthSignal(routingText || message) ||
+          hasCivicSignal(routingText || message) ||
+          resolvedAgentKey === 'nagarik_mitra' ||
+          resolvedAgentKey === 'yojana_saathi' ||
+          isGreetingOnlyMessage(routingText || message);
         if (!isConversational) {
           const fallbackAgent = agentConfigs[resolvedAgentKey];
           let fallbackReply = grounding.answer;
