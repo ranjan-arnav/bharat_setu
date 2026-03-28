@@ -691,21 +691,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {showCitizenNudge && (
-            <div className="absolute left-2 right-2 bottom-[64px] z-20">
-              <div className="bg-white/90 dark:bg-[#071020]/90 border border-black/5 dark:border-white/10 rounded-xl px-3 py-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-[14px] text-[#8B5CF6] shrink-0">auto_awesome</span>
-                <p className="text-[10px] text-slate-600 dark:text-gray-300 leading-tight truncate">{t('aiAssistant', 'AI Assistant')}: {citizenAssistantNudge}</p>
-                <button
-                  onClick={() => setCitizenNudgeDismissed(true)}
-                  className="ml-auto text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 transition-colors"
-                  aria-label={t('dismiss', 'Dismiss')}
-                >
-                  <span className="material-symbols-outlined text-[14px]">close</span>
-                </button>
-              </div>
-            </div>
-          )}
+
 
           <ScreenDrawer
             open={drawerOpen}

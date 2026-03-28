@@ -368,7 +368,7 @@ Track seamlessly with Bharat Setu! 🇮🇳
           </button>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              {t('bureaucracyXRay', 'Bureaucracy X-Ray')}
+              {t('schemeTracker', 'Scheme Tracker')}
               <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400">
                 TRACK
               </span>
