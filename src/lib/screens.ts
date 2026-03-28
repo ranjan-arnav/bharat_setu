@@ -12,7 +12,7 @@ export const SCREENS = {
   sos: { file: '/screens/sos.html', label: 'Emergency SOS', icon: 'emergency', tab: 'sos' },
   'help-neighbour': { file: '', label: 'Document Explainer', icon: 'description', tab: 'services' },
   'scheme-scanner': { file: '/screens/scheme-scanner.html?v=4', label: 'Scheme Scanner', icon: 'qr_code_scanner', tab: 'services' },
-  'xray-tracker': { file: '/screens/xray-tracker.html', label: 'Bureaucracy X-Ray', icon: 'track_changes', tab: 'track' },
+  'xray-tracker': { file: '/screens/xray-tracker.html', label: 'Scheme Tracker', icon: 'track_changes', tab: 'track' },
   community: { file: '/screens/community.html?v=4', label: 'Community Impact', icon: 'groups', tab: 'community' },
   karma: { file: '/screens/karma.html?v=2', label: 'Civic Karma', icon: 'military_tech', tab: 'community' },
   profile: { file: '', label: 'Profile', icon: 'person', tab: 'profile' },

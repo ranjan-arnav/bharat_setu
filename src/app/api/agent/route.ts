@@ -184,19 +184,26 @@ Reply with one word only (agent key or null):`;
 // ── Script-agnostic overrides — run on the RAW message BEFORE translation ──────
 // Catches Devanagari/regional keywords when Azure Translator is not configured.
 const RAW_OVERRIDES: { pattern: RegExp; agent: AgentKey; reason: string }[] = [
+  // Legal/Safety FIRST so they intercept compounded queries
+  { pattern: /घरेलू\s*हिंसा|मारपीट|उत्पीड़न|छेड़छाड़|बलात्कार|दहेज|यौन\s*शोषण|महिला\s*सुरक्षा|पति.*मार|पति.*पीट|मारता\s*है|पीटता\s*है/, agent: 'vidhi_sahayak', reason: 'Hindi domestic violence and women safety keywords' },
+  { pattern: /पुलिस|कानून|वकील|अदालत|एफआईआर|न्याय|अधिकार|गिरफ्तार|जमानत|थाना/,                             agent: 'vidhi_sahayak',    reason: 'Hindi legal keywords' },
+  { pattern: /wak[ie]el|waqeel|vakeel?|vakil|attorney|lawyer|legal\s*aid|mujhe.*waqeel|ek.*vakil/i,           agent: 'vidhi_sahayak',    reason: 'lawyer/legal counsel transliterations' },
+  { pattern: /kabza|encroach|unauthori[sz]ed.*propert|propert.*disput|zameen.*vivad|zameen.*kabza|propert.*kabza/i, agent: 'vidhi_sahayak', reason: 'property encroachment = legal dispute' },
+
+  // Financial
   { pattern: /बैंक|खाता|पैसा|पैसे|लोन|ऋण|कर्ज|बचत|निवेश|भुगतान|ईएमआई|मुद्रा|जन\s*धन|खुलवाना|बीमा|यूपीआई/, agent: 'arthik_salahkar', reason: 'Hindi banking keywords' },
   { pattern: /धोखा|ठगी|साइबर|फ्रॉड|घोटाला|ओटीपी/,                                                           agent: 'arthik_salahkar', reason: 'Hindi fraud keywords' },
+
+  // Health
   { pattern: /डॉक्टर|दवा|दवाई|अस्पताल|बीमार|बुखार|दर्द|खांसी|उल्टी|इलाज|तबियत/,                           agent: 'swasthya_sahayak', reason: 'Hindi health keywords' },
-  { pattern: /योजना|किसान|राशन|पेंशन|सब्सिडी|मनरेगा|नरेगा|उज्ज्वला|आवास|फसल/,                              agent: 'yojana_saathi',    reason: 'Hindi scheme keywords' },
-  { pattern: /पुलिस|कानून|वकील|अदालत|एफआईआर|न्याय|अधिकार|गिरफ्तार|जमानत|थाना/,                             agent: 'vidhi_sahayak',    reason: 'Hindi legal keywords' },
-  { pattern: /घरेलू\s*हिंसा|मारपीट|उत्पीड़न|छेड़छाड़|बलात्कार|दहेज|यौन\s*शोषण|महिला\s*सुरक्षा|पति.*मार|पति.*पीट|मारता\s*है|पीटता\s*है/, agent: 'vidhi_sahayak', reason: 'Hindi domestic violence and women safety keywords' },
-  { pattern: /सड़क|पानी|बिजली|सफाई|कचरा|नाला|नगर\s*निगम|शिकायत/,                                            agent: 'nagarik_mitra',    reason: 'Hindi civic keywords' },
   { pattern: /पेट.*अजीब|अजीब.*पेट|पेट.*अजब|अजब.*पेट|पेट.*खराब|पेट.*दर्द|पेट.*ठीक\s*नहीं/,              agent: 'swasthya_sahayak',  reason: 'Hindi stomach/digestive complaint' },
   { pattern: /pet.*ajib|ajib.*pet|pet.*ajeeb|ajeeb.*pet|pet.*kharab|pet.*dard/i,                             agent: 'swasthya_sahayak',  reason: 'Transliterated stomach complaint' },
-  // Lawyer/legal counsel — Urdu/Hindi transliterations often missed by Ministral
-  { pattern: /wak[ie]el|waqeel|vakeel?|vakil|attorney|lawyer|legal\s*aid|mujhe.*waqeel|ek.*vakil/i,           agent: 'vidhi_sahayak',    reason: 'lawyer/legal counsel transliterations' },
-  // Property encroachment — civic-sounding but fundamentally a legal matter
-  { pattern: /kabza|encroach|unauthori[sz]ed.*propert|propert.*disput|zameen.*vivad|zameen.*kabza|propert.*kabza/i, agent: 'vidhi_sahayak', reason: 'property encroachment = legal dispute' },
+
+  // Schemes
+  { pattern: /योजना|किसान|राशन|पेंशन|सब्सिडी|मनरेगा|नरेगा|उज्ज्वला|आवास|फसल/,                              agent: 'yojana_saathi',    reason: 'Hindi scheme keywords' },
+
+  // Civic
+  { pattern: /सड़क|पानी|बिजली|सफाई|कचरा|नाला|नगर\s*निगम|शिकायत/,                                            agent: 'nagarik_mitra',    reason: 'Hindi civic keywords' },
 ];
 
 function getRawOverride(message: string): AgentKey | null {
@@ -210,26 +217,21 @@ function getRawOverride(message: string): AgentKey | null {
 }
 
 const ENGLISH_OVERRIDES: { pattern: RegExp; agent: AgentKey; reason: string }[] = [
-  // Ration card operations — always a government scheme (PDS), never civic
-  { pattern: /ration\s+card|rashan\s+card|ration\s+list/i,            agent: 'yojana_saathi',    reason: 'ration card = PDS scheme' },
-  // Ayushman Bharat card registration/application — scheme enrollment, not health treatment
-  { pattern: /ayushman\s+bharat\s+card|pmjay\s+card|ayushman\s+card/i, agent: 'yojana_saathi',   reason: 'Ayushman card = PMJAY scheme enrollment' },
-  // MGNREGA job card
-  { pattern: /mgnrega\s+card|job\s+card|narega\s+card/i,              agent: 'yojana_saathi',    reason: 'job card = MGNREGA scheme' },
-  // Feeling unwell / sick / strange — any form of body health complaint in English
-  { pattern: /not\s+feeling\s+well|not\s+feeling\s+good|feeling\s+(sick|ill|bad|unwell|dizzy|weak|weird|strange|off|funny|odd)|not\s+well|i'?m\s+(sick|ill|unwell)|i\s+am\s+(sick|ill|unwell)|feel\s+(sick|bad|ill|unwell|weird|strange|off|funny|odd)|man.*ajeeb|ajeeb.*lag|body\s+(pain|ache)|headache|sore\s+throat|high\s+fever|stomach\s+(pain|ache|upset)|chest\s+pain/i, agent: 'swasthya_sahayak', reason: 'feeling unwell/sick/weird = health' },
-  // Eating/drinking/digestion/bowel problems — body health, not financial
-  { pattern: /\b(poop|stool|bowel movement|loose motion|diarrh|vomit(?:ing)?|nausea|problem in eating|problem in drinking|eating problem|digestion problem)\b/i, agent: 'swasthya_sahayak', reason: 'eating/digestion/bowel = body health' },
-  // Stomach feeling strange/weird/bad
-  { pattern: /stomach\s+(?:is\s+)?(?:strange|weird|bad|off|wrong|not\s+(?:ok|right|normal|good))|(?:strange|weird|ajeeb|ajib)\s+(?:stomach|tummy|gut|pet)|my\s+stomach|stomach\s+(?:ache|pain|hurt)/i, agent: 'swasthya_sahayak', reason: 'stomach strange/weird/bad = health' },
-  // Property encroachment — a legal matter not civic
-  { pattern: /\bkabza\b|encroach|unauthori[sz]ed.*propert|propert.*disput|propert.*encroach|illegal.*occupation/i, agent: 'vidhi_sahayak', reason: 'property encroachment = legal dispute' },
-  // Lawyer/legal help — English
-  { pattern: /\b(lawyer|attorney|advocate|legal\s+counsel|legal\s+help|need.*lawyer|want.*lawyer|find.*lawyer)\b/i, agent: 'vidhi_sahayak', reason: 'lawyer/legal help keywords' },
-  // Domestic violence, abuse, harassment, and women safety issues are legal/safety matters
+  // Legal & Safety matters FIRST
   { pattern: /domestic\s+violence|domestic\s+abuse|abusive\s+husband|husband.*(beat|hits|hit|abuse)|beating\s+me|marital\s+rape|sexual\s+harassment|molest|molestation|rape|assault|stalking|dowry\s+harassment|women'?s\s+safety|gender\s+violence/i, agent: 'vidhi_sahayak', reason: 'domestic violence and women safety keywords' },
-  // Personal safety concerns — night, streets, threats
   { pattern: /feel\s+unsafe|feeling\s+unsafe|unsafe\s+at\s+night|not\s+safe|feel\s+threatened|feel\s+scared|being\s+followed|someone\s+following|stalked|i\s+am\s+scared|scared\s+at\s+night|fear\s+for\s+(my\s+)?safety/i, agent: 'vidhi_sahayak', reason: 'personal safety/unsafe = legal/police' },
+  { pattern: /\b(lawyer|attorney|advocate|legal\s+counsel|legal\s+help|need.*lawyer|want.*lawyer|find.*lawyer|legal\s+case|court|judge)\b/i, agent: 'vidhi_sahayak', reason: 'lawyer/legal help keywords' },
+  { pattern: /\bkabza\b|encroach|unauthori[sz]ed.*propert|propert.*disput|propert.*encroach|illegal.*occupation/i, agent: 'vidhi_sahayak', reason: 'property encroachment = legal dispute' },
+
+  // Schemes
+  { pattern: /ration\s+card|rashan\s+card|ration\s+list/i,            agent: 'yojana_saathi',    reason: 'ration card = PDS scheme' },
+  { pattern: /ayushman\s+bharat\s+card|pmjay\s+card|ayushman\s+card/i, agent: 'yojana_saathi',   reason: 'Ayushman card = PMJAY scheme enrollment' },
+  { pattern: /mgnrega\s+card|job\s+card|narega\s+card/i,              agent: 'yojana_saathi',    reason: 'job card = MGNREGA scheme' },
+
+  // Health
+  { pattern: /not\s+feeling\s+well|not\s+feeling\s+good|feeling\s+(sick|ill|bad|unwell|dizzy|weak|weird|strange|off|funny|odd)|not\s+well|i'?m\s+(sick|ill|unwell)|i\s+am\s+(sick|ill|unwell)|feel\s+(sick|bad|ill|unwell|weird|strange|off|funny|odd)|man.*ajeeb|ajeeb.*lag|body\s+(pain|ache)|headache|sore\s+throat|high\s+fever|stomach\s+(pain|ache|upset)|chest\s+pain/i, agent: 'swasthya_sahayak', reason: 'feeling unwell/sick/weird = health' },
+  { pattern: /\b(poop|stool|bowel movement|loose motion|diarrh|vomit(?:ing)?|nausea|problem in eating|problem in drinking|eating problem|digestion problem)\b/i, agent: 'swasthya_sahayak', reason: 'eating/digestion/bowel = body health' },
+  { pattern: /stomach\s+(?:is\s+)?(?:strange|weird|bad|off|wrong|not\s+(?:ok|right|normal|good))|(?:strange|weird|ajeeb|ajib)\s+(?:stomach|tummy|gut|pet)|my\s+stomach|stomach\s+(?:ache|pain|hurt)/i, agent: 'swasthya_sahayak', reason: 'stomach strange/weird/bad = health' },
 ];
 
 function getKeywordOverride(english: string): AgentKey | null {
@@ -303,9 +305,45 @@ function resolveLegalDomainForTurn(primaryText: string, fallbackTexts: string[] 
 }
 
 function hasLegalSignal(value: string): boolean {
-  return /(legal|law|act|section|fir|complaint|rights|tribunal|court|nalsa|tele-?law|consumer|rera|police|authority)/i.test(
+  return /(legal|law|act|section|fir|complaint|rights|tribunal|court|nalsa|tele-?law|consumer|rera|police|authority|advocate|vakeel|waqeel|vakil|attorney|justice)/i.test(
     value
   );
+}
+
+function hasHealthSignal(value: string): boolean {
+  return /(sick|unwell|feeling\s+(bad|well|good|unwell|weird|strange|off|ill)|doctor|hospital|medicine|pain|fever|cough|ill|vaccination|ayushman|abha|symptom|health|clinic|nurse)/i.test(
+    value
+  );
+}
+
+function hasSchemeSignal(value: string): boolean {
+  return /(scheme|yojana|ration|pension|subsidy|pm-kisan|mgnrega|benefit|eligibility|apply|enroll|status|certificate|card)/i.test(
+    value
+  );
+}
+
+function hasCivicSignal(value: string): boolean {
+  return /(road|water|garbage|drainage|street\s+light|sanitation|garbage|civic|municipal|local\s+office|pothole|sewage)/i.test(
+    value
+  );
+}
+
+function hasFinanceSignal(value: string): boolean {
+  return /(bank|loan|emi|upi|payment|fraud|scam|money|savings?|credit|debit|account|insurance|tax|gst|debt|investment|cyber|1930|otp|pin|cvv|jan\s*dhan|mudra|pf|epf|epfo|provident|uan|balance)/i.test(
+    value
+  );
+}
+
+function hasSignalForAgent(value: string, agentKey: AgentKey): boolean {
+  if (!value) return false;
+  switch (agentKey) {
+    case 'vidhi_sahayak': return hasLegalSignal(value);
+    case 'swasthya_sahayak': return hasHealthSignal(value);
+    case 'yojana_saathi': return hasSchemeSignal(value);
+    case 'nagarik_mitra': return hasCivicSignal(value);
+    case 'arthik_salahkar': return hasFinanceSignal(value);
+    default: return false;
+  }
 }
 
 function hasDomainSignal(value: string, domain: LegalDomainKey): boolean {
@@ -353,11 +391,7 @@ type ArthikResource = {
   url: string;
 };
 
-function hasFinanceSignal(value: string): boolean {
-  return /(bank|loan|emi|upi|payment|fraud|scam|money|savings?|credit|debit|account|insurance|tax|gst|debt|investment|cyber|1930|otp|pin|cvv|jan\s*dhan|mudra|pf|epf|epfo|provident|uan|balance)/i.test(
-    value
-  );
-}
+
 
 function detectFinanceDomainTagOptional(text: string): FinanceDomainKey | null {
   const value = (text || '').toLowerCase();
@@ -1988,8 +2022,16 @@ export async function POST(request: NextRequest) {
       // Apply result
       if (classified && classified !== agentKey) {
         suggestedAgent = classified;
-        resolvedAgentKey = classified;
-        console.log(`[ROUTING] HANDOFF: ${agentKey} → ${classified} (clientDetected=${clientDetectedAgent})`);
+        // Refined Routing: If user query has signals for BOTH current agent and classified agent,
+        // STAY in the current agent to handle multi-intent response.
+        const hasCurrentSignal = hasSignalForAgent(routingText || message, agentKey as AgentKey);
+        if (hasCurrentSignal) {
+          resolvedAgentKey = agentKey as AgentKey;
+          console.log(`[ROUTING] MULTI-INTENT: staying on ${agentKey}, but suggesting ${classified}`);
+        } else {
+          resolvedAgentKey = classified;
+          console.log(`[ROUTING] HANDOFF: ${agentKey} → ${classified} (clientDetected=${clientDetectedAgent})`);
+        }
       } else if (!classified && clientAgent && clientAgent !== agentKey) {
         // Both classifiers failed — last resort: trust client keyword detection
         resolvedAgentKey = clientAgent;
@@ -2046,96 +2088,104 @@ export async function POST(request: NextRequest) {
       });
 
       if (grounding.usedFallback) {
-        const fallbackAgent = agentConfigs[resolvedAgentKey];
-        let fallbackReply = grounding.answer;
-        if (resolvedAgentKey === 'vidhi_sahayak') {
-          if (!resolvedLegalDomain) {
-            fallbackReply = buildVidhiIntakeResponse(language);
-          } else {
-          if (!vidhiPoliceContact) {
-            vidhiPoliceContact = await lookupLocalPoliceContact(
-              citizenProfile?.digipin || digipin || '',
-              citizenProfile?.address || ''
-            );
-          }
-          if (!vidhiLegalResource) {
-            vidhiLegalResource = await lookupLegalDomainResource(
+        // MULTI-INTENT RESILIENCE: 
+        // If RAG failed but the user is also talking about a help/conversational concern (like "not feeling well")
+        // do NOT return the fallback. Instead, proceed to LLM for a unified empathetic response.
+        const isConversational = hasHealthSignal(routingText || message); 
+        if (!isConversational) {
+          const fallbackAgent = agentConfigs[resolvedAgentKey];
+          let fallbackReply = grounding.answer;
+          if (resolvedAgentKey === 'vidhi_sahayak') {
+            if (!resolvedLegalDomain) {
+              fallbackReply = buildVidhiIntakeResponse(language);
+            } else {
+            if (!vidhiPoliceContact) {
+              vidhiPoliceContact = await lookupLocalPoliceContact(
+                citizenProfile?.digipin || digipin || '',
+                citizenProfile?.address || ''
+              );
+            }
+            if (!vidhiLegalResource) {
+              vidhiLegalResource = await lookupLegalDomainResource(
+                routingText || message,
+                resolvedLegalDomain || detectLegalDomainTag(routingText || message)
+              );
+            }
+            fallbackReply = sanitizeVidhiStructuredResponse(
               routingText || message,
-              resolvedLegalDomain || detectLegalDomainTag(routingText || message)
-            );
-          }
-          fallbackReply = sanitizeVidhiStructuredResponse(
-            routingText || message,
-            buildVidhiStructuredResponse(
-              routingText || message,
-              grounding.answer,
-              language,
-              vidhiLegalResource,
-              resolvedLegalDomain || undefined
-            ),
-            language,
-            resolvedLegalDomain || undefined
-          );
-          fallbackReply = `${fallbackReply}${buildVidhiSupportFooter(
-            routingText || message,
-            vidhiPoliceContact,
-            vidhiLegalResource,
-            resolvedLegalDomain || undefined
-          )}`;
-          }
-        } else if (resolvedAgentKey === 'arthik_salahkar') {
-          if (!resolvedFinanceDomain) {
-            fallbackReply = buildArthikIntakeResponse(language);
-          } else {
-            fallbackReply = sanitizeArthikStructuredResponse(
-              routingText || message,
-              buildArthikStructuredResponse(
+              buildVidhiStructuredResponse(
                 routingText || message,
                 grounding.answer,
                 language,
-                resolvedFinanceDomain || undefined,
-                resolvedFinanceSubintent
+                vidhiLegalResource,
+                resolvedLegalDomain || undefined
               ),
               language,
-              resolvedFinanceDomain || undefined,
-              resolvedFinanceSubintent
+              resolvedLegalDomain || undefined
             );
-            fallbackReply = `${fallbackReply}${buildArthikSupportFooter(
+            fallbackReply = `${fallbackReply}${buildVidhiSupportFooter(
               routingText || message,
-              resolvedFinanceDomain || undefined,
-              resolvedFinanceSubintent
+              vidhiPoliceContact,
+              vidhiLegalResource,
+              resolvedLegalDomain || undefined
             )}`;
+            }
+          } else if (resolvedAgentKey === 'arthik_salahkar') {
+            if (!resolvedFinanceDomain) {
+              fallbackReply = buildArthikIntakeResponse(language);
+            } else {
+              fallbackReply = sanitizeArthikStructuredResponse(
+                routingText || message,
+                buildArthikStructuredResponse(
+                  routingText || message,
+                  grounding.answer,
+                  language,
+                  resolvedFinanceDomain || undefined,
+                  resolvedFinanceSubintent
+                ),
+                language,
+                resolvedFinanceDomain || undefined,
+                resolvedFinanceSubintent
+              );
+              fallbackReply = `${fallbackReply}${buildArthikSupportFooter(
+                routingText || message,
+                resolvedFinanceDomain || undefined,
+                resolvedFinanceSubintent
+              )}`;
+            }
+          } else if (resolvedAgentKey === 'swasthya_sahayak' && isSwasthyaEmergencyIntent(routingText || message)) {
+            fallbackReply = await buildSwasthyaEmergencyResponse(
+              routingText || message,
+              language,
+              citizenProfile?.digipin || digipin || '',
+              citizenProfile?.address || '',
+              citizenProfile?.emergencyContacts?.[0]?.name || 'Primary family contact',
+              deriveAbhaSharePayload(citizenProfile as CitizenProfileContext | null)
+            );
           }
-        } else if (resolvedAgentKey === 'swasthya_sahayak' && isSwasthyaEmergencyIntent(routingText || message)) {
-          fallbackReply = await buildSwasthyaEmergencyResponse(
-            routingText || message,
-            language,
-            citizenProfile?.digipin || digipin || '',
-            citizenProfile?.address || '',
-            citizenProfile?.emergencyContacts?.[0]?.name || 'Primary family contact',
-            deriveAbhaSharePayload(citizenProfile as CitizenProfileContext | null)
-          );
+          const fallbackResponse = NextResponse.json({
+            reply: fallbackReply,
+            agent: {
+              name: fallbackAgent.name,
+              role: fallbackAgent.role,
+              color: fallbackAgent.color,
+              icon: fallbackAgent.icon,
+            },
+            languageEnrichment: chatEnrichment,
+            suggestedAgent,
+            resolvedAgentKey,
+            grounding,
+            source: 'rag-fallback',
+          });
+          telemetry.complete(200, {
+            source: 'rag-fallback',
+            resolvedAgentKey,
+            ragConfidence: grounding.confidence,
+          });
+          return fallbackResponse;
+        } else {
+          console.log(`[RAG] Fallback relaxation active: conversational intent detected. Proceeding to LLM.`);
         }
-        const fallbackResponse = NextResponse.json({
-          reply: fallbackReply,
-          agent: {
-            name: fallbackAgent.name,
-            role: fallbackAgent.role,
-            color: fallbackAgent.color,
-            icon: fallbackAgent.icon,
-          },
-          languageEnrichment: chatEnrichment,
-          suggestedAgent,
-          resolvedAgentKey,
-          grounding,
-          source: 'rag-fallback',
-        });
-        telemetry.complete(200, {
-          source: 'rag-fallback',
-          resolvedAgentKey,
-          ragConfidence: grounding.confidence,
-        });
-        return fallbackResponse;
       }
     }
 
@@ -2250,6 +2300,16 @@ ${grounding && !grounding.usedFallback ? `
 - If you mention eligibility, benefits, deadlines, or application steps, cite source numbers like [1], [2].
 - Do not invent values beyond these sources.
 ${grounding.citations.map((citation, index) => `[${index + 1}] ${citation.title}: ${citation.snippet}${citation.url ? ` (${citation.url})` : ''}`).join('\n')}
+` : ''}
+
+${suggestedAgent && suggestedAgent !== resolvedAgentKey ? `
+[MULTI-INTENT HINT]
+User's query involves the ${suggestedAgent} domain as well. While you are responding as the ${agent.role}, please briefly acknowledge this secondary concern and inform the user they can click the button to hand off the conversation to the ${agentConfigs[suggestedAgent as AgentKey].name} for more expert specialized assistance.
+` : ''}
+
+${grounding?.usedFallback ? `
+[RAG_RECORD_NOT_FOUND_NOTE]
+I could not find a specific government record or scheme matching this exact query in our official database. Please provide a helpful, empathetic general response based on your training as ${agent.name}, but explicitly note that you couldn't find a direct record match and suggest they consult a local official or the relevant portal.
 ` : ''}`;
 
     // Build messages array — cap history at 6 messages (3 turns) to save tokens

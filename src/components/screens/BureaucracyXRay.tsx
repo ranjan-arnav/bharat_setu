@@ -247,6 +247,8 @@ export default function BureaucracyXRay({ onClose }: { onClose?: () => void }) {
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [reportDate, setReportDate] = useState<string>('');
+  const [showRTIModal, setShowRTIModal] = useState(false);
+  const [showCPGRAMSModal, setShowCPGRAMSModal] = useState(false);
 
   async function handleDownload(app: Application) {
     if (isDownloading) return;
@@ -322,33 +324,11 @@ Track seamlessly with Bharat Setu! 🇮🇳
   }
 
   function handleRTI() {
-    setActiveAgent('yojana_saathi');
-    setOverlay('agent-chat');
-    
-    const context = `**Application:** ${app.title}\n\n**Reference ID:** ${app.refId}\n\n**Category:** ${app.category}\n\n**Claim Amount:** ${app.amount}\n\n**Filed Via:** ${app.filedVia}\n\n**Assigned Officer:** ${app.officer} (${app.officerRole})\n\n**Expected ETA:** ${app.eta} (${app.daysLeft} days remaining)\n\n**Current Phase:** ${app.steps.filter(s => s.status === 'active' || s.status === 'done').pop()?.label || 'Pending'}`;
-    
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('inject-chat-message', {
-          detail: { message: `I need to file an RTI application because my application has been stuck and I need transparency on its processing. Here are my application details:\n\n${context}\n\nPlease guide me step-by-step through filling the RTI form.` }
-        })
-      );
-    }, 500);
+    setShowRTIModal(true);
   }
 
   function handleCPGRAMS() {
-    setActiveAgent('yojana_saathi');
-    setOverlay('agent-chat');
-    
-    const context = `**Application:** ${app.title}\n\n**Reference ID:** ${app.refId}\n\n**Category:** ${app.category}\n\n**Claim Amount:** ${app.amount}\n\n**Filed Via:** ${app.filedVia}\n\n**Assigned Officer:** ${app.officer} (${app.officerRole})\n\n**Expected ETA:** ${app.eta} (${app.daysLeft} days remaining)\n\n**Current Phase:** ${app.steps.filter(s => s.status === 'active' || s.status === 'done').pop()?.label || 'Pending'}`;
-
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('inject-chat-message', {
-          detail: { message: `I need to file a CPGRAMS complaint regarding my delayed application. The processing is stuck and I need to escalate this. Here are my application details:\n\n${context}\n\nPlease guide me step-by-step through filling the CPGRAMS grievance form.` }
-        })
-      );
-    }, 500);
+    setShowCPGRAMSModal(true);
   }
 
   function handleCall() {
@@ -830,6 +810,67 @@ Track seamlessly with Bharat Setu! 🇮🇳
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* RTI Modal */}
+      <AnimatePresence>
+        {showRTIModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white dark:bg-[#0f1f3a] w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-black/10 dark:border-white/10">
+              <div className="bg-blue-600 px-4 py-3 text-white flex justify-between items-center">
+                <h3 className="font-bold flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">description</span> File RTI Application</h3>
+                <button onClick={() => setShowRTIModal(false)} className="active:scale-90 transition-transform"><span className="material-symbols-outlined text-[18px]">close</span></button>
+              </div>
+              <div className="p-4 space-y-3">
+                 <p className="text-[11px] text-slate-500 mb-3">Requesting information under Right to Information Act, 2005.</p>
+                 <div>
+                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Subject</label>
+                   <input type="text" readOnly value={`Status enquiry for ${app.title}`} className="w-full mt-1 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-slate-700 dark:text-gray-200 outline-none" />
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Reference ID</label>
+                   <input type="text" readOnly value={app.refId} className="w-full mt-1 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-slate-700 dark:text-gray-200 outline-none font-mono tracking-tight" />
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Information Requested</label>
+                   <textarea rows={3} className="w-full mt-1 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-slate-900 dark:text-white outline-none resize-none focus:border-blue-500 transition-colors" defaultValue={`Please provide the exact current status, reasons for delay, and name of the official holding the application ${app.refId}.`}></textarea>
+                 </div>
+                 <button onClick={() => { alert('RTI Application submitted successfully!'); setShowRTIModal(false); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 mt-4 rounded-xl transition-colors text-[13px] shadow-md shadow-blue-500/20 active:scale-[0.98]">Submit RTI via Yojana Saathi</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CPGRAMS Modal */}
+      <AnimatePresence>
+        {showCPGRAMSModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="bg-white dark:bg-[#0f1f3a] w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border border-black/10 dark:border-white/10">
+              <div className="bg-[#8B5CF6] px-4 py-3 text-white flex justify-between items-center">
+                <h3 className="font-bold flex items-center gap-2"><span className="material-symbols-outlined text-[18px]">support_agent</span> CPGRAMS Grievance</h3>
+                <button onClick={() => setShowCPGRAMSModal(false)} className="active:scale-90 transition-transform"><span className="material-symbols-outlined text-[18px]">close</span></button>
+              </div>
+              <div className="p-4 space-y-3">
+                 <p className="text-[11px] text-slate-500 mb-3">Public Grievance Redressal and Monitoring System.</p>
+                 <div>
+                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Grievance Category</label>
+                   <input type="text" readOnly value={`Delay in Processing: ${app.category}`} className="w-full mt-1 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-slate-700 dark:text-gray-200 outline-none" />
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Application Number</label>
+                   <input type="text" readOnly value={app.refId} className="w-full mt-1 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-slate-700 dark:text-gray-200 outline-none font-mono tracking-tight" />
+                 </div>
+                 <div>
+                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Grievance Details</label>
+                   <textarea rows={3} className="w-full mt-1 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 text-[13px] text-slate-900 dark:text-white outline-none resize-none focus:border-[#8B5CF6] transition-colors" defaultValue={`My application ${app.refId} has been stuck out of SLA bounds (` + app.daysLeft + ` days left). Officer assigned is ${app.officer}. Please expedite.`}></textarea>
+                 </div>
+                 <button onClick={() => { alert('CPGRAMS Grievance registered successfully!'); setShowCPGRAMSModal(false); }} className="w-full bg-[#8B5CF6] hover:bg-[#7c3aed] text-white font-bold py-3 mt-4 rounded-xl transition-colors text-[13px] shadow-md shadow-[#8B5CF6]/20 active:scale-[0.98]">Lodge Grievance</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
