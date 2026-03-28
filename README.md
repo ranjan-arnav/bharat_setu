@@ -1,219 +1,615 @@
-# Bharat Setu — Bridging the Digital Divide with Agentic Governance
+# Bharat Setu - Deep Technical README
 
-<div align="center">
-
-![Bharat Setu Banner](https://img.shields.io/badge/Bharat%20Setu-Agentic%20Governance-FF9933?style=for-the-badge)
-
-[![Next.js](https://img.shields.io/badge/Next.js-14.2.x-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
-[![React](https://img.shields.io/badge/React-18.x-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+![Bharat Setu](https://img.shields.io/badge/Bharat%20Setu-Agentic%20Governance-FF9933?style=for-the-badge)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2.21-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-18.3.1-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Azure AI](https://img.shields.io/badge/Azure-AI%20Services-0078D4?style=flat-square&logo=microsoftazure&logoColor=white)](https://azure.microsoft.com)
-[![GitHub Models](https://img.shields.io/badge/GitHub-Models-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/marketplace/models)
+[![Azure](https://img.shields.io/badge/Azure-AI%20%2B%20Data-0078D4?style=flat-square&logo=microsoftazure&logoColor=white)](https://azure.microsoft.com)
 
-**A multilingual, agentic governance platform simplifying public service access through specialized AI orchestration.**  
-*Intuitive Specialist Routing · RAG-Grounded Answers · Multilingual Voice Access · Emergency SOS Orchestration*
+## What This README Is
 
-</div>
+This is a deep architecture and implementation README for the full `D:\newbs\bharat-setu` workspace subtree.
 
----
+It is intended for:
+- New engineers onboarding into the codebase
+- Architects reviewing data flow and deployment topology
+- Contributors extending routes, state, or Azure integrations
 
-## 📖 Table of Contents
+## Analysis Scope (This Pass)
 
-1. [Overview](#-overview)
-2. [The Agent Council](#-the-agent-council)
-3. [System Architecture](#-system-architecture)
-4. [Core Features](#-core-features)
-5. [Tech Stack](#-tech-stack)
-6. [Getting Started](#-getting-started)
-7. [Environment Configuration](#-environment-configuration)
-8. [API Reference](#-api-reference)
+Static analysis completed over the `bharat-setu/bharat-setu` project root:
 
----
+- Total non-generated files scanned (excluding `.git`, `.next`, `node_modules`): `303`
+- Text/config/docs/source files scanned: `275`
+- Total scanned text lines: `205,976`
+- Focused runtime code/assets (`src`, `BACKEND`, `azure-functions/async-workers`, `public/screens`):
+  - Files: `168`
+  - Lines: `51,307`
 
-## 🌟 Overview
+Important: this repository contains large diagnostic artifacts (`real_lint_errors.txt`, `real_lint_utf8.txt`) that dominate raw line counts; this README focuses on executable source architecture and supporting docs.
 
-**Bharat Setu** is an agentic platform designed to bridge the gap between complex government bureaucracy and the everyday citizen. Instead of navigating a maze of departments and forms, citizens interact with a natural language interface (Voice or Chat) that intelligently routes their needs to specialized experts.
+## High-Level Overview
 
-The platform uses a **Council-based Orchestration** model, where a central controller identifies user intent and hands off the conversation to specialized agents grounded in official policy records via Retrieval-Augmented Generation (RAG).
+Bharat Setu is a multilingual governance platform composed of:
+- A Next.js 14 App Router web app (`bharat-setu/bharat-setu`)
+- API route handlers for agent orchestration, civic workflows, SOS, and analytics
+- Cosmos-backed backend domain services under `BACKEND/src/services`
+- Optional Azure Functions queue workers for asynchronous enrichment/processing
+- A React Native companion app (`bharat-call-rn`) integrating through call-handoff endpoints
 
----
+Primary product capabilities:
+- Council of Five AI assistants (civic, health, schemes, finance, legal)
+- Voice input/output (STT/TTS) in Indian language contexts
+- Grievance filing and tracking
+- Scheme discovery and guidance
+- DIGIPIN + SOS alerting pipeline
+- Government dashboards (alerts, analytics, case oversight)
 
-## 🧠 The Agent Council
-
-The heart of Bharat Setu is its council of five specialized agents, each an expert in a critical domain of governance.
-
-```mermaid
-mindmap
-  root((Bharat Setu Council))
-    Nagarik Mitra
-      "Civic & Municipal Services"
-      "Roads & Infrastructure"
-      "Waste & Sanitation"
-      "Grievance Tracking"
-    Swasthya Sahayak
-      "Medical Guidance"
-      "Emergency Protocols"
-      "Ayushman Bharat / ABHA"
-      "Nearest PHC Lookup"
-    Yojana Saathi
-      "Scheme Enrollment"
-      "Eligibility Assessment"
-      "PDS / Ration Support"
-      "Benefit Distribution"
-    Arthik Salahkar
-      "Banking & Digital Finance"
-      "Fraud & Scam Prevention"
-      "Loan/Mudra Guidance"
-      "Financial Literacy"
-    Vidhi Sahayak
-      "Legal Rights & FIR Advice"
-      "Free Legal Aid (NALSA)"
-      "RTI & CPGRAMS Filing"
-      "Domain-Specific Remedies"
-```
-
----
-
-## 🏗️ System Architecture
-
-Bharat Setu follows a modular, serverless-first architecture optimized for low-latency routing and high-confidence policy grounding.
+## System Architecture Diagram
 
 ```mermaid
-graph TD
-    subgraph "User Interface layer"
-        User([Citizen Interface]) --> UI[Hybrid App Shell]
-        UI --> Voice[Voice Controller]
-        UI --> Chat[Agent Chat Component]
-    end
+flowchart LR
+  subgraph Clients
+    C1[Citizen Web PWA]
+    C2[Government Web Console]
+    C3[Bharat Call RN App]
+  end
 
-    subgraph "Orchestration Layer (/api/agent)"
-        Chat & Voice --> Orch[API Orchestrator]
-        Orch --> Trans[Azure Translator]
-        
-        subgraph "Intent Routing"
-            Orch --> Phi[Phi-4-mini Router]
-            Orch --> TFIDF[Local TF-IDF Fallback]
-            Orch --> Signal[Multi-Intent Detection]
-        end
-    end
+  subgraph FrontendShell[Next.js Frontend Shell]
+    F1[App Router Pages]
+    F2[Stitched HTML Screens in iframe]
+    F3[Overlay Components]
+    F4[Zustand Global Store]
+  end
 
-    subgraph "Specialist Logic & Grounding"
-        Phi & TFIDF --> Specialists[Specialized Agent Configs]
-        Specialists --> RAG[Azure AI Search / RAG]
-        RAG --> DB[(Policy & Scheme Knowledge Base)]
-    end
+  subgraph ApiLayer[Next.js API Route Layer]
+    A1[/api/agent]
+    A2[/api/backend/*]
+    A3[/api/sos/*]
+    A4[/api/call/*]
+    A5[/api/uploads/*]
+    A6[/api/kisan/*]
+    A7[/api/ml/*]
+  end
 
-    subgraph "External Systems"
-        Specialists --> SOS[SOS Engine / Responder API]
-        Specialists --> Maps[Bing Maps Geodata]
-        Specialists --> Backend[Custom Grievance Backend]
-    end
+  subgraph BackendDomain[Domain Services]
+    B1[BACKEND services]
+    B2[Cosmos Container Bootstrap]
+  end
 
-    style Orch fill:#f96,stroke:#333,stroke-width:2px
-    style DB fill:#0078D4,color:#fff
+  subgraph DataAndAsync[Data + Async]
+    D1[(Azure Cosmos DB)]
+    D2[(Azure Storage Queues)]
+    D3[(Azure Blob Uploads)]
+    D4[Azure Functions Async Workers]
+  end
+
+  subgraph AiAndExternal[AI + External Integrations]
+    X1[Azure OpenAI]
+    X2[GitHub Models]
+    X3[Azure Speech]
+    X4[Azure Translator]
+    X5[Azure Vision]
+    X6[Azure Content Safety]
+    X7[Azure AI Search]
+    X8[Fast2SMS / Webhooks]
+  end
+
+  C1 --> F1
+  C2 --> F1
+  C3 --> A4
+
+  F1 --> F2
+  F1 --> F3
+  F3 --> F4
+
+  F3 --> A1
+  F3 --> A2
+  F3 --> A3
+  F3 --> A4
+  F3 --> A5
+  F3 --> A6
+  F3 --> A7
+
+  A1 --> X1
+  A1 --> X2
+  A1 --> X4
+  A2 --> B1
+  A3 --> X8
+  A4 --> B1
+  A5 --> D3
+  A5 --> D2
+  A6 --> X1
+  A6 --> X2
+  A7 --> X2
+
+  B1 --> B2
+  B2 --> D1
+  D2 --> D4
+  D4 --> D1
+  D4 --> X5
+  D4 --> X6
 ```
 
----
+## Detailed Diagram 1 - Agent Routing + LLM Fallback Chain
 
-## ✨ Core Features
+```mermaid
+sequenceDiagram
+  participant UI as AgentChat/Voice UI
+  participant API as /api/agent
+  participant ENR as Language Enrichment
+  participant TR as Translator
+  participant PHI as Phi-4 Classifier
+  participant TF as Local TF-IDF Classifier
+  participant AOAI as Azure OpenAI Deployments
+  participant GHM as GitHub Models
 
-### 🏢 Scheme Tracker (formerly Bureaucracy X-Ray)
-A specialized workspace for navigating complex administrative requirements.
-- **Intelligent Intake**: Detects the specific government form or scheme needed.
-- **Interactive Forms**: Direct integration with **RTI** and **CPGRAMS** workflows through pre-filled, empathetic form modals.
-- **Step-by-Step Guidance**: Breaks down complex legal procedures into citizen-friendly actions.
+  UI->>API: POST message + context
+  API->>ENR: analyzeAndPersistLanguageEnrichment
+  ENR-->>API: sentiment/entities/routing hint (optional)
 
-### 🔄 Multi-Intent Routing
-Handles compound queries seamlessly. If a user states: *"I'm not feeling well and I need legal help"*, the system:
-1.  Maintains the conversation with the current specialist (e.g., Health).
-2.  Provides an empathetic response to the primary concern.
-3.  Injects a **suggested handoff** to the secondary specialist (e.g., Legal).
-4.  Relaxes RAG requirements to ensure no conversational input is met with a "no record found" fallback.
+  API->>API: RAW_OVERRIDES on original text
+  alt no raw override
+    API->>TR: translateToEnglish (cached)
+    TR-->>API: translated text
+    API->>API: ENGLISH_OVERRIDES
+  end
 
-### 🎙️ Multilingual Voice Access
-- Supporting **22 Indian languages** for profile setup and interaction.
-- Azure Speech-backed Speech-to-Text (STT) and Text-to-Speech (TTS).
-- Real-time translation enabling cross-lingual council expertise.
+  alt still unresolved
+    API->>PHI: classifyAgentWithPhi (5s race)
+    API->>TF: classifyAgentLocal fallback
+    PHI-->>API: agentKey or null
+    TF-->>API: agentKey or null
+  end
 
-### 🚨 Emergency SOS Stack
-- **Protocol Activation**: Triggered via dashboard or high-urgency keywords.
-- **Responder Fan-out**: Geolocation-aware notifications via Fast2SMS.
-- **Live Location Tracking**: Real-time updates via DIGIPIN integration.
+  API->>API: choose resolvedAgentKey
+  API->>AOAI: chat completion (deployment A/B round-robin)
+  alt 429 or failure
+    AOAI-->>API: retry with other deployment
+    API->>GHM: fallback model call
+  end
+  alt all providers fail
+    API->>API: demo reply fallback
+  end
 
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 14 (App Router), React 18, Tailwind CSS, Framer Motion.
-- **State Management**: Zustand.
-- **AI/LLM**: 
-  - **Primary**: Azure OpenAI (GPT-4o) for response generation.
-  - **Routing**: Phi-4-mini (via GitHub Models) for high-speed intent classification.
-- **Search**: Azure AI Search (Vector + Semantic) for grounded RAG.
-- **Infrastructure**: Vercel (Frontend), Railway (VDB / Backend Services).
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 20+
-- npm
-
-### Installation
-```bash
-git clone https://github.com/ranjan-arnav/bharat_setu.git
-cd bharat_setu
-npm install
+  API-->>UI: reply + suggestedAgent + resolvedAgentKey + source
 ```
 
-### Development
-```bash
-npm run dev
+## Detailed Diagram 2 - Persistence + Async Job Pipeline
+
+```mermaid
+flowchart TD
+  U1[UI action in component]
+  S1[Zustand store action]
+  P1[postJson best-effort fire-and-forget]
+  R1[/api/backend/* routes]
+  SV[BACKEND domain services]
+  CX[(Cosmos containers)]
+
+  U2[File upload request]
+  R2[/api/uploads/sas]
+  B1[(Azure Blob)]
+  R3[/api/uploads/finalize]
+  Q1[(Azure Storage Queue)]
+  W1[Azure Functions workers]
+
+  U1 --> S1 --> P1 --> R1 --> SV --> CX
+
+  U2 --> R2 --> B1
+  U2 --> R3 --> SV
+  R3 --> Q1
+  Q1 --> W1
+  W1 --> CX
+  W1 --> B1
 ```
 
----
+## Detailed Diagram 3 - SOS Emergency Dispatch Flow
 
-## ⚙️ Environment Configuration
+```mermaid
+sequenceDiagram
+  participant UI as SOSButton
+  participant SOS as /api/sos
+  participant ENG as sos-engine
+  participant DISP as /api/sos/dispatch
+  participant SMS as /api/sos/sms
+  participant STORE as sos-storage
+  participant POLL as /api/sos/status
 
-Create a `.env.local` file with the following essential keys:
+  UI->>SOS: POST lat/lng/digipin + user context
+  SOS->>ENG: classifySOSContext
+  ENG-->>SOS: context flags
+  SOS->>ENG: buildResponderList
+  ENG-->>SOS: responders (base + conditional)
+  SOS->>ENG: dispatchSOS(payload)
+  SOS-->>UI: immediate eventId response
 
-```env
-# AI & Search
-AZURE_OPENAI_API_KEY=
-AZURE_OPENAI_ENDPOINT=
-AZURE_SEARCH_ENDPOINT=
-AZURE_SEARCH_KEY=
-AZURE_SEARCH_INDEX=bharat-setu-index
+  par responder fan-out
+    ENG->>DISP: dispatch per responder
+  and consolidated sms
+    SOS->>SMS: single formatted SMS message
+  end
 
-# Translation & Speech
-AZURE_TRANSLATOR_KEY=
-AZURE_TRANSLATOR_REGION=
-AZURE_SPEECH_KEY=
-AZURE_SPEECH_REGION=
-
-# Orchestration
-GITHUB_TOKEN= # For Phi-4 Routing
-NER_SERVICE_URL= # Railway Backend
+  ENG->>STORE: setSOSDispatchResult(eventId)
+  UI->>POLL: GET status by eventId
+  POLL-->>UI: responder statuses + allNotified
 ```
 
+## Repository Structure (Practical)
+
+```text
+bharat-setu/
+  package.json                   # minimal root package (workspace-level)
+  project_explained.md
+  bharat-setu/                   # actual Next.js app root
+    src/
+      app/
+        page.tsx                 # main shell + overlay orchestration
+        api/                     # all route handlers
+        actions/                 # server actions helper(s)
+      components/                # feature overlays + gov modules + kisan screens
+      lib/                       # store, AI config, SOS engine, telemetry, async libs
+    BACKEND/
+      src/
+        cosmos-backend.ts
+        services/                # domain services for persistence + analytics
+    azure-functions/
+      async-workers/             # queue workers (optional deployment)
+    public/
+      screens/                   # stitched HTML screen assets
+```
+
+## Frontend Runtime Architecture
+
+Main shell: `src/app/page.tsx`
+
+Key runtime patterns:
+- Uses a hybrid UI: static stitched screen HTML in iframe + React overlays
+- Main state source is a single Zustand store (`src/lib/store.ts`)
+- Overlay mode drives active workflows: chat, grievance, schemes, voice, SOS, impact, digipin, tracking, emergency contacts
+- Government and citizen views diverge by `userType` and onboarding state
+- Profile and translation data are injected into iframe via postMessage and direct DOM updates (same-origin)
+
+Major component groups:
+- Citizen overlays: `AgentChat`, `GrievanceForm`, `SchemeScanner`, `VoiceAssistant`, `SOSButton`, `TrackCasesOverlay`, `ImpactDashboard`
+- Government modules: `GovDashboard`, `GovCaseManagement`, `GovAnalytics`, `GovAlerts`, `GovAdmin`
+- Domain surfaces: `CivicDigitalTwin`, `DigipinLocator`, `EmergencyContactsManager`, `KisanMitra` screen set
+
+## State Management (Zustand) - `src/lib/store.ts`
+
+Core slices include:
+- Auth/session: `isAuthenticated`, `userType`, `role`, onboarding completion
+- Agent chat: per-agent histories + active agent
+- Profile: lightweight `userProfile` + rich `citizenProfile`
+- Tracking: `trackedItems`, status updates, badge counters
+- Voice + overlays + notifications + karma/rewards
+- Collective action clusters + form state
+
+Persistence pattern:
+- Store updates are immediate and local
+- Backend sync is best-effort (`postJson`) and intentionally non-blocking
+- Writes fan out to:
+  - `/api/backend/profiles`
+  - `/api/backend/messages`
+  - `/api/backend/cases`
+  - `/api/backend/scheme-applications`
+
+## Backend Domain Layer (`BACKEND/src/services`)
+
+Design pattern:
+- Route handlers remain thin wrappers
+- All Cosmos logic lives in services
+- Validation and errors are normalized via `BackendHttpError`
+
+Main service responsibilities:
+- `profile-service.ts`: upsert/fetch profile records
+- `message-service.ts`: chat message persistence by conversation
+- `case-service.ts`: citizen and government case queries + upsert
+- `scheme-application-service.ts`: application lifecycle persistence
+- `sos-session-service.ts`: SOS session metadata
+- `sos-event-service.ts`: event timeline records with optional TTL
+- `citizen-alert-service.ts`: governance broadcast advisories
+- `analytics-service.ts`: aggregated gov analytics and report intelligence
+- `civic-twin-graph-service.ts`: predictive civic warning graph
+- `reset-session-service.ts`: cloud state purge across containers
+
+## Cosmos Containers + Partition Design
+
+Container map from `BACKEND/src/cosmos-backend.ts`:
+
+- `profiles` -> partition `/userId`
+- `messages` -> partition `/conversationId`, TTL default 14 days
+- `sosSessions` -> partition `/userId`
+- `sosEvents` -> partition `/sessionId`, TTL default 7 days
+- `cases` -> partition `/userId`
+- `schemeApplications` -> partition `/userId`
+- `enrichments` -> partition `/userId`, TTL default 14 days
+- `uploads` -> partition `/userId`, TTL default 30 days
+- `asyncJobs` -> partition `/userId`, TTL default 14 days
+- `clusterAnalytics` -> partition `/userId`, TTL default 30 days
+- `notificationAnalytics` -> partition `/userId`, TTL default 30 days
+- `citizenAlerts` -> partition `/scopeId`, TTL default 14 days
+
+## API Catalog (Complete Route Inventory)
+
+### Core Assistant + Media
+
+- `POST /api/agent` - multi-step agent routing + response generation
+- `POST /api/voice` - TTS and speech token issuance (`action=tts|token`)
+- `POST /api/stt` - speech-to-text transcription
+- `POST /api/translate` - text translation with passthrough fallback
+- `POST /api/vision-chat` - image caption/tags/objects context
+- `POST /api/content-safety` - text moderation check
+- `GET /api/health` - service health
+
+### Governance Backend Persistence
+
+- `GET,POST /api/backend/profiles`
+- `GET,POST /api/backend/messages`
+- `GET,POST /api/backend/cases`
+- `GET,POST /api/backend/scheme-applications`
+- `GET,POST /api/backend/sos-sessions`
+- `GET,POST /api/backend/sos-events`
+- `GET,POST /api/backend/citizen-alerts`
+- `GET /api/backend/analytics`
+- `GET /api/backend/civic-twin-graph`
+- `POST /api/backend/reset-session`
+
+### SOS + Emergency
+
+- `POST,GET /api/sos`
+- `POST /api/sos/dispatch`
+- `POST /api/sos/end`
+- `POST /api/sos/sms`
+- `GET /api/sos/status`
+- `POST /api/sos/update-location`
+
+### Call Handoff (Web <-> RN)
+
+- `POST /api/call/handoff`
+- `GET /api/call/ring/poll`
+- `POST /api/call/ring/trigger`
+
+### Upload + Document Pipeline
+
+- `POST /api/uploads/sas`
+- `POST /api/uploads/finalize`
+- `POST /api/document-assistant`
+
+### Scheme + News Explainers
+
+- `POST /api/schemes`
+- `POST /api/explain-scheme`
+- `POST /api/explain-news`
+- `POST /api/summarize-news`
+- `POST /api/generate-form`
+
+### Kisan Domain
+
+- `POST /api/kisan/recommend`
+- `POST /api/kisan/diagnosis`
+- `GET /api/kisan/market`
+- `POST /api/kisan/mandi`
+- `POST /api/kisan/distance`
+- `POST /api/kisan/tts`
+
+### Intelligence + ML Utility Routes
+
+- `POST /api/intelligence/multi-agent`
+- `POST /api/ml/triage`
+- `POST /api/ml/auth-anomaly`
+- `POST /api/ml/auto-resolve`
+- `POST /api/ml/broadcast-ai`
+- `POST /api/ml/duplicate-detector`
+- `POST /api/ml/performance-analyze`
+- `POST,GET /api/ml/knowledge-graph`
+- `GET /api/ml/anomaly-detector`
+- `GET /api/ml/causal-engine`
+- `GET /api/ml/intelligence-engine`
+- `GET /api/ml/marl-optimizer`
+- `GET /api/ml/scheme-leakage`
+- `GET /api/ml/sentiment-radar`
+- `GET /api/ml/spatiotemporal`
+
+## Agent Orchestration Deep Notes
+
+`src/app/api/agent/route.ts` is the largest control plane module and includes:
+
+- Language-aware routing heuristics (raw-script and translated English overrides)
+- Optional language enrichment persistence (`azure-language-enrichment`)
+- Multi-provider model cascade:
+  - Azure OpenAI deployment A/B (round-robin)
+  - GitHub Models fallback
+  - deterministic demo fallback responses
+- Specialized response shaping for legal and finance assistants
+- Grounded RAG integration (`azure-rag`) with confidence thresholding and fallback answers
+
+## SOS Engine Deep Notes
+
+`src/lib/sos-engine.ts` implements:
+
+- DIGIPIN encode/decode
+- Context classification flags (`requiresWomenSafety`, `requiresChildSafety`, `requiresDisasterResponse`, `requiresCyberCrime`)
+- Dynamic responder list synthesis
+- Single-responder dispatch abstraction with channel strategy (`api`, `sms`, `webhook`, `call`)
+- Concurrent fan-out dispatch and per-responder status collection
+- Offline SMS deep-link helper
+
+`/api/sos` complements engine dispatch by:
+- validating inbound coordinates/digipin
+- triggering fan-out asynchronously
+- sending one consolidated SMS payload via `/api/sos/sms`
+- returning immediate `eventId` for polling
+
+## Call Handoff + RN Integration
+
+`/api/call/handoff`:
+- validates requested agent
+- normalizes mobile format
+- compacts conversation context
+- emits continuation token + deep link
+- dispatches ring via webhook and/or local queue fallback
+
+`/api/call/ring/poll`:
+- RN app polling endpoint (default channel: `local-rn`)
+
+Queue storage behavior (`src/lib/call-handoff-store.ts`):
+- in-memory queue with TTL (2 minutes)
+- Cosmos fallback persistence if configured
+
+## Async Processing Subsystem
+
+Optional worker app: `azure-functions/async-workers`
+
+Queue consumers:
+- cluster worker
+- notify worker
+- postprocess worker
+- scan-classify worker
+
+Job lifecycle:
+- status transitions in Cosmos `asyncJobs`
+- upload status transitions in Cosmos `uploads`
+- analytics side writes to `clusterAnalytics` and `notificationAnalytics`
+
+Processor enrichments include:
+- sentiment scoring via Azure Language (or fallback)
+- image caption/tags via Azure Vision (when configured)
+- content risk scoring via Azure Content Safety (when configured)
+
+## Data Models (Practical Summary)
+
+Primary domain objects persisted through backend routes/services:
+
+- Profile
+  - keys: `id=profile:{userId}`, `userId`, `userProfile`, `citizenProfile`, timestamps
+- Message
+  - keys: `id(uuid)`, `conversationId=userId:agentKey`, `role`, `content`, `createdAt`
+- Case
+  - keys: `id(caseId)`, `userId`, `category`, `status`, `metadata`, timestamps
+- Scheme Application
+  - keys: `id(applicationId)`, `userId`, `workflowStage`, `notes`, timestamps
+- SOS Session/Event
+  - session metadata under `sosSessions`, event timeline under `sosEvents`
+- Citizen Alert
+  - scoped advisory records (`scopeId`, `category`, `priority`, `expiresAt`)
+- Async Job / Upload
+  - queue-backed lifecycle records and scan metadata
+
+## External Dependencies and Integrations
+
+AI and speech:
+- Azure OpenAI
+- GitHub Models
+- Azure Speech
+- Azure Translator
+- Azure Vision
+- Azure Content Safety
+- Azure AI Search
+
+Data and storage:
+- Azure Cosmos DB
+- Azure Blob Storage
+- Azure Storage Queue
+
+Other integrations:
+- Fast2SMS
+- Webhook-based notification channels
+- OpenStreetMap (reverse geocoding)
+
+## Security + Resilience Patterns
+
+Observed patterns across the codebase:
+
+- Fail-soft behavior when Azure config is missing (demo or bypass fallback)
+- SSML/XML escaping in TTS route to avoid injection in generated speech payloads
+- Route-level telemetry instrumentation for important APIs
+- Best-effort backend synchronization from store to avoid UI lockups
+- TTL usage in Cosmos containers for cost and lifecycle control
+- Multi-provider AI fallback chain to mitigate quota/rate-limit failures
+
+## Build, Run, and Deploy
+
+Project root for runtime commands:
+- `bharat-setu/bharat-setu`
+
+Main scripts:
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run lint`
+
+Deployment assets:
+- `Dockerfile` (multi-stage, standalone output, healthcheck on `/api/health`)
+- `netlify.toml` (Next.js plugin build path)
+- `azure-deploy.ps1`, `deploy.sh` (deployment helpers)
+- `next.config.js` includes `serverActions.allowedOrigins` expansion for tunnel/dev domains
+
+## Environment Variables (Grouped)
+
+Required by feature area:
+
+- Core AI:
+  - `AZURE_OPENAI_ENDPOINT`
+  - `AZURE_OPENAI_API_KEY`
+  - `AZURE_OPENAI_DEPLOYMENT`
+  - `AZURE_OPENAI_DEPLOYMENT_B`
+  - `GITHUB_TOKEN`
+  - `GITHUB_TOKEN_PHI`
+  - `GITHUB_TOKEN_MINISTRAL`
+
+- Speech and translation:
+  - `AZURE_SPEECH_KEY`
+  - `AZURE_SPEECH_REGION`
+  - `AZURE_TRANSLATOR_KEY`
+  - `AZURE_TRANSLATOR_REGION`
+
+- Vision/safety/search:
+  - `AZURE_VISION_ENDPOINT`
+  - `AZURE_VISION_KEY`
+  - `AZURE_CONTENT_SAFETY_ENDPOINT`
+  - `AZURE_CONTENT_SAFETY_KEY`
+  - `AZURE_SEARCH_ENDPOINT`
+  - `AZURE_SEARCH_KEY`
+  - `AZURE_SEARCH_INDEX`
+
+- Data + async:
+  - `COSMOSDB_ENDPOINT`
+  - `COSMOSDB_KEY`
+  - `COSMOSDB_DATABASE`
+  - `AZURE_STORAGE_CONNECTION_STRING`
+  - `ASYNC_QUEUE_CLUSTER_NAME`
+  - `ASYNC_QUEUE_NOTIFY_NAME`
+  - `ASYNC_QUEUE_POSTPROCESS_NAME`
+  - `ASYNC_QUEUE_SCAN_NAME`
+
+- Observability:
+  - `APPLICATIONINSIGHTS_CONNECTION_STRING`
+  - `APPINSIGHTS_ROLE_NAME`
+  - `APPINSIGHTS_SAMPLING_PERCENTAGE`
+
+- Call handoff and SOS:
+  - `MOBILE_CALL_RING_WEBHOOK_URL`
+  - `MOBILE_CALL_DEEPLINK_BASE`
+  - `MOBILE_CALL_DEVICE_CHANNEL`
+  - `MOBILE_CALL_FALLBACK_NUMBER`
+  - `FAST2SMS_API_KEY`
+
+## Known Characteristics / Engineering Notes
+
+- Codebase is intentionally fallback-heavy to keep demo/dev experience resilient
+- A few modules are large and multi-responsibility (notably `src/app/api/agent/route.ts`, `AgentChat.tsx`, `Onboarding.tsx`)
+- There is a clear separation between route handlers and backend domain services
+- Async pipeline is present both in Next app and dedicated Azure Functions workers
+- i18n corpus is extensive (`src/lib/i18n/translations.ts`)
+
+## Recommended Next Improvements
+
+1. Split `src/app/api/agent/route.ts` into composable strategy modules (routing, legal formatter, finance formatter, provider adapters).
+2. Centralize provider clients with shared retry/circuit-breaker policy.
+3. Add contract tests for all `/api/backend/*` routes against mock Cosmos containers.
+4. Move polling-based call handoff to event push/WebSocket where infra allows.
+5. Add OpenAPI-style generated route docs from source to keep this inventory auto-synced.
+
 ---
 
-## 🔌 API Reference
-
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/api/agent` | `POST` | The central orchestrator for intent routing and specialist responses. |
-| `/api/schemes` | `POST` | Policy search and scheme matching with RAG grounding. |
-| `/api/grievance` | `POST` | Direct filing of civic grievances with automated domain assignment. |
-| `/api/sos` | `POST` | Emergency workflow management and responder notification. |
-| `/api/stt` / `/api/voice` | `POST` | Voice interaction layer (Speech-to-Text and Text-to-Speech). |
-
----
-
-<div align="center">
-
-**Bharat Setu**  
-*Empowering citizens through human-centric, agentic technology.*
-
-</div>
+If you are onboarding: start with `src/app/page.tsx`, then `src/lib/store.ts`, then `src/app/api/agent/route.ts`, then backend service files in `BACKEND/src/services`.
